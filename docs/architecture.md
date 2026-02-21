@@ -5,77 +5,153 @@
 | フェーズ | 内容 | 状態 |
 |---------|------|------|
 | Phase 1 | Issue精緻化 & キューイング | **完了** |
-| Phase 2 | AI Coder Agent（コード生成→PR作成） | 未実装 |
-| Phase 3 | Reviewer Agent / Webhook連携 | 未実装 |
+| Phase 2 | コード簡素化 + マルチプロジェクト基盤 | 未実装 |
+| Phase 3 | セキュリティ基盤 + ガードレール | 未実装 |
+| Phase 4 | AI Coder Agent（コード生成→PR作成） | 未実装 |
+| Phase 5 | Discord UX強化 | 未実装 |
+| Phase 6 | 運用強化 | 未実装 |
 
 ## 全体像
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    MacBook 2018 サーバー                      │
-│                    (Tailscale経由でアクセス)                   │
-│                                                             │
-│  ┌──────────┐   ┌──────────────┐   ┌──────────────────┐     │
-│  │ Discord  │──>│ Issue Refiner│──>│ GitHub Issue      │     │
-│  │ Bot      │<──│ Agent        │   │ Manager (Octokit) │     │
-│  └──────────┘   └──────────────┘   └────────┬─────────┘     │
-│       ↑               ↑                     │              │
-│       │          ┌────┴─────┐               │              │
-│       │          │ LLM Layer│               │              │
-│       │          │ (CLI/SDK)│               │              │
-│       │          └──────────┘               │              │
-│       │                                      │              │
-│       │          ┌──────────────┐             ↓              │
-│       └──────────│ Notifier     │   ┌──────────────────┐     │
-│                  └──────────────┘   │ Job Queue        │     │
-│                         ↑           │ + Cron Scheduler │     │
-│                         │           └────────┬─────────┘     │
-│                         │                    │              │
-│                         │           ┌────────┴─────────┐     │
-│                         └───────────│ AI Coder Agent   │     │
-│                                     │ (未実装・Phase 2) │     │
-│                                     └──────────────────┘     │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     MacBook 2018 サーバー                         │
+│                     (Tailscale経由でアクセス)                      │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐     │
+│  │              issue-ai-bot (1プロセス)                     │     │
+│  │                                                         │     │
+│  │  [Discord Bot] ──── guildId ──── [projects.json]        │     │
+│  │       │              逆引き       (プロジェクト登録)      │     │
+│  │       ▼                                                 │     │
+│  │  [Issue Refiner] ── claude CLI ── [LLM Layer]           │     │
+│  │       │                           claude.ts (CLI)       │     │
+│  │       ▼                           agent.ts  (SDK)       │     │
+│  │  [GitHub Issue] ── gh --repo ──── マルチリポ対応          │     │
+│  │       │                                                 │     │
+│  │       ▼                                                 │     │
+│  │  [Job Queue] ── node-cron ── 夜間バッチ                  │     │
+│  │       │          (共有キュー: 全プロジェクト)              │     │
+│  │       ▼                                                 │     │
+│  │  [AI Coder Agent] ── Agent SDK                          │     │
+│  │       │    └── Docker サンドボックス内で実行              │     │
+│  │       │    └── claude -p --cwd /path/to/project         │     │
+│  │       │         (各プロジェクトの CLAUDE.md を自動ロード)  │     │
+│  │       ▼                                                 │     │
+│  │  [Notifier] ── プロジェクト別チャンネルに通知             │     │
+│  └─────────────────────────────────────────────────────────┘     │
+│                                                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                      │
+│  │project-a │  │project-b │  │project-c │  (ローカルclone)      │
+│  │CLAUDE.md │  │CLAUDE.md │  │CLAUDE.md │                      │
+│  └──────────┘  └──────────┘  └──────────┘                      │
+└─────────────────────────────────────────────────────────────────┘
+
+[Discord Server A] ←──── guildId:111 ──── project-a
+[Discord Server B] ←──── guildId:222 ──── project-b
+[Discord Server C] ←──── guildId:333 ──── project-c
 ```
+
+## マルチプロジェクト設計
+
+### プロジェクト登録 (`projects.json`)
+
+```json
+[
+  {
+    "slug": "eisa-map",
+    "guildId": "111111111111",
+    "channelId": "222222222222",
+    "repo": "kudoaidesu/eisa-map",
+    "localPath": "/Users/teruya/workspace/eisa-map"
+  },
+  {
+    "slug": "issue-ai-bot",
+    "guildId": "333333333333",
+    "channelId": "444444444444",
+    "repo": "kudoaidesu/issue-ai-bot",
+    "localPath": "/Users/teruya/workspace/issue-ai-bot"
+  }
+]
+```
+
+### プロジェクト特定フロー
+
+```
+スラッシュコマンド / サーバー内メッセージ:
+  interaction.guildId → projects.json 逆引き → プロジェクト確定
+
+DM:
+  ユーザーが参加しているサーバーが1つ → 自動確定
+  複数サーバー → プロジェクト選択UI表示
+```
+
+### プロジェクト追加手順
+
+1. `projects.json` にエントリ追加（5行）
+2. Discord新サーバー作成 → Botを招待
+3. 対象リポジトリに `CLAUDE.md` を配置
+4. Bot再起動
+
+**コード変更ゼロ。**
 
 ## コンポーネント詳細
 
 ### 1. Discord Bot (`src/bot/`)
 
-Discord.jsで実装するBotサーバー。
-
-**責務:**
-- ユーザーからのメッセージ/スラッシュコマンドの受信
-- Issue Refinerへの転送
-- 処理結果のDiscord通知
+Discord.jsで実装。1つのBotが複数Discordサーバーに参加し、guildIdでプロジェクトを自動特定する。
 
 **スラッシュコマンド:**
+
 | コマンド | 説明 |
 |---------|------|
 | `/issue <内容>` | 新しいIssueリクエストを送信 |
 | `/status` | キューの状態を確認 |
 | `/queue` | 現在のキュー一覧を表示 |
 | `/run` | 手動でキュー処理を開始 |
-| `/cron` | Cronジョブの状態確認・設定変更 |
+| `/cron` | Cronジョブの状態確認 |
 
 **DMモード:**
-- DMで直接メッセージを送るだけでIssueリクエストとして処理
-- スラッシュコマンド不要の自然な対話
-- ユーザーごとのセッション管理による多ターン会話対応
+- DMで直接メッセージ → Issueリクエストとして処理
+- 複数サーバー参加時はプロジェクト選択UI
+- ユーザーごとのセッション管理によるマルチターン対話
+
+**通知 (`bot/theme.ts` + `bot/notifier.ts`):**
+- カラー・絵文字・Embed生成を `theme.ts` に集約
+- `notify()` 1関数でプロジェクト別チャンネルに通知
 
 ### 2. LLM Layer (`src/llm/`)
 
-Claude Code CLI / Agent SDKの抽象化レイヤー。
+用途ベースでCLI/SDKを使い分ける。グローバルな `LLM_MODE` 切り替えは廃止。
 
-**デュアルモード対応:**
-| モード | 実装ファイル | 実行方法 |
-|--------|------------|---------|
-| CLI | `claude-cli.ts` | `claude -p` コマンドを `execFile` で実行 |
-| SDK | `claude-sdk.ts` | `@anthropic-ai/claude-code` を動的インポート |
+| ファイル | 用途 | 使用場面 |
+|---------|------|---------|
+| `claude.ts` | Claude CLI (`claude -p`) | 軽量な1ショット処理 |
+| `agent.ts` | Agent SDK (`@anthropic-ai/claude-code`) | 予算制御・進捗通知・セッション管理 |
+| `codex.ts` (将来) | Codex CLI | レビュー |
 
-- `LLM_MODE` 環境変数で切り替え（デフォルト: `cli`）
-- SDKが未インストールの場合はCLIにフォールバック
-- システムプロンプトとユーザープロンプトを受け取り、LLMレスポンスを返す共通インターフェース
+**Agent SDK の活用機能:**
+
+| 機能 | 用途 |
+|------|------|
+| `maxBudgetUsd` | 夜間バッチの暴走防止 |
+| `includePartialMessages` | Discordリアルタイム進捗通知 |
+| `canUseTool` | 危険コマンドの動的ブロック |
+| `resume` / `forkSession` | Issue Refinerのマルチターン会話 |
+| `agents` | coder/reviewer サブエージェント定義 |
+| `total_cost_usd` / `modelUsage` | コスト通知 |
+| `outputFormat` | 構造化出力 |
+| `hooks` | ライフサイクルイベントのコールバック |
+
+**モデル選択ガイドライン:**
+
+| 用途 | 推奨モデル | 理由 |
+|------|----------|------|
+| Issue精緻化 | Sonnet | バランス型で十分 |
+| 計画生成 | Opus | 複雑な判断が必要 |
+| コード生成 | Sonnet | コスパ重視 |
+| テスト生成 | Haiku | 高速・低コスト |
+| レビュー | Codex CLI | 別ツール |
 
 ### 3. Issue Refiner Agent (`src/agents/issue-refiner/`)
 
@@ -86,172 +162,298 @@ Claude Code CLI / Agent SDKの抽象化レイヤー。
 曖昧な入力 → コンテキスト分析 → 不足情報チェック → 逆質問 or Issue生成
 ```
 
-**精緻化プロセス:**
-1. ユーザーの入力をLLM Layerで解析
-2. 対象リポジトリのコードベース情報をコンテキストとして付与
-3. 情報が不足している場合はDiscord経由で逆質問
-4. 十分な情報が揃ったら構造化Issueを生成
-
 **セッション管理:**
-- ユーザーごとにマルチターンの会話を追跡
-- 構造化JSONレスポンスの検証とフォールバックパース
-
-**生成するIssue構造:**
-```markdown
-## 概要
-[1-2行の要約]
-
-## 背景・目的
-[なぜこの変更が必要か]
-
-## 要件
-- [ ] 要件1
-- [ ] 要件2
-
-## 受け入れ条件
-- [ ] 条件1
-- [ ] 条件2
-
-## 技術メモ
-[関連ファイル、影響範囲など]
-```
+- Phase 2まで: 自前のMap管理
+- Phase 4以降: Agent SDK の `resume` / `forkSession` に移行
 
 ### 4. GitHub Issue Manager (`src/github/issues.ts`)
 
-Octokit (GitHub REST API) を使ったIssue操作。
+`gh` CLI経由でIssue操作。マルチリポ対応のため全関数に `repo?` パラメータを追加。
 
-**実装済み機能:**
-- Issue作成（タイトル、本文、ラベル）
-- Issue取得
-- Issueステータス更新（open/closed）
-- Issueへのコメント追加
-
-**未実装（Phase 2）:**
-- PR作成・レビューリクエスト (`pulls.ts`)
-- Webhook受信 (`webhooks.ts`)
+```typescript
+// gh issue create --repo owner/project-a
+createIssue(params, repo?)
+getIssue(issueNumber, repo?)
+updateIssueState(issueNumber, state, repo?)
+addComment(issueNumber, comment, repo?)
+```
 
 ### 5. Job Queue + Cron Scheduler (`src/queue/`)
 
-IssueをFIFOキューで管理し、Cronで定時処理する。
+全プロジェクトのIssueを1つの共有キューで管理。
 
-**キュー管理:**
 ```typescript
 interface QueueItem {
   id: string
   issueNumber: number
-  repository: string
+  repository: string        // プロジェクト識別キー
   priority: 'high' | 'medium' | 'low'
   status: 'pending' | 'processing' | 'completed' | 'failed'
-  createdAt: Date
-  scheduledAt?: Date
+  createdAt: string
+  completedAt?: string
+  error?: string
 }
 ```
 
-**Cronスケジュール例:**
-| スケジュール | 説明 |
-|-------------|------|
-| `0 22 * * *` | 毎日22:00にキュー処理開始 |
-| `0 2 * * *` | 毎日02:00に処理状況レポート |
-| `*/30 * * * *` | 30分ごとに高優先度Issueをチェック |
+**処理ハンドラ:**
+```typescript
+type QueueProcessHandler = (issueNumber: number, repository: string) => Promise<void>
+```
 
-**永続化:**
-- キュー状態はJSONファイル (`data/queue.json`) に保存
-- プロセス再起動時に復元可能
+### 6. AI Coder Agent（別リポジトリ: `ai-coder-agent`）
 
-### 6. AI Coder Agent (`src/agents/coder/`) — 未実装
+Agent SDK ベースの自律型コーディングエージェント。
 
-> Phase 2 で実装予定。現在はキュー処理時にスタブメッセージを返す。
+**サブエージェント構成:**
+```
+.claude/agents/
+├── planner.md      # Issue → 実装計画の生成
+├── coder.md        # 計画 → コード変更
+├── reviewer.md     # コード品質・セキュリティチェック
+└── tester.md       # テスト生成・実行
+```
 
-**計画している実行フロー:**
-1. Issueの要件を読み込み
-2. 対象リポジトリをクローン/pull
-3. Claude Code CLIでコード変更を生成
-4. ローカルでビルド・テスト実行
-5. ブランチ作成・commit・push
-6. PR作成
-7. 結果をDiscordに通知
+**実行フロー:**
+```
+1. Issue の要件を読み込み
+2. Planner が実装計画を生成 → Discord通知 → 人間が承認
+3. Coder がコード変更を生成（Docker サンドボックス内）
+4. ビルド・テスト実行 → 失敗時自動修正（最大3回）
+5. Tester がテストを自動生成・実行
+6. Reviewer がコード品質・セキュリティチェック
+7. Codex CLI でセキュリティレビュー
+8. Draft PR 作成
+9. 結果を Discord に通知（コスト・実行時間含む）
+```
 
-**安全策:**
-- 変更はfeatureブランチにのみ push
-- mainへの直接pushは禁止
-- PR作成後は人間のレビュー・マージを待つ
+**セーフガード:**
+- Docker サンドボックス内で実行（ファイルシステム・ネットワーク分離）
+- `canUseTool` で危険コマンドを動的ブロック
+- `maxBudgetUsd` で予算制御
+- featureブランチへのみ push、mainへの直接push禁止
+- 各ステップ後にGitチェックポイント、失敗時はreset
+- 3回失敗 → 人間にエスカレーション
+- PRサイズ制限（500行超はStacked PRに分割）
 
-### 7. Notifier (`src/bot/notifier.ts`)
+## セキュリティ設計
 
-処理結果をDiscordにリッチEmbed形式で通知する。
-
-**通知タイミング:**
-- Issue精緻化完了（Issueリンク付き）
-- キュー処理開始・完了
-- エラー発生
-
-### 8. CLI Setup Wizard (`src/cli/`)
-
-対話式のセットアップウィザード。
-
-**機能:**
-- Claude Code CLIの存在検出
-- LLMモード選択（CLI / SDK）
-- Discord, GitHub, Cronの設定入力
-- `.env` ファイルの自動生成
-
-### 9. Configuration (`src/config.ts`)
-
-環境変数ベースの設定管理。
-
-**主要設定:**
-| 変数 | デフォルト | 説明 |
-|------|----------|------|
-| `LLM_MODE` | `cli` | LLM実行モード（cli/sdk） |
-| `LLM_MODEL` | `sonnet` | 使用モデル |
-| `CRON_SCHEDULE` | `0 22 * * *` | キュー処理スケジュール |
-| `QUEUE_DATA_DIR` | `./data` | キューデータ保存先 |
-
-### 10. Logger (`src/utils/logger.ts`)
-
-構造化ログ出力ユーティリティ。
-
-## データフロー（現在の実装）
+### 多層防御
 
 ```
-1. ユーザーがDiscordで「ログイン画面のボタンがずれてる」と送信
+Layer 1: 入力サニタイズ
+  → Discord入力のプロンプトインジェクション対策
+  → コマンド許可リスト化
 
-2. Discord Bot がメッセージを受信（DM or /issue コマンド）
+Layer 2: canUseTool / Hooks
+  → rm -rf, git push --force, eval 等のブロック
+  → .env / credentials への書き込み防止
+  → 重要ファイル保護リスト
 
-3. Issue Refiner が LLM Layer 経由で解析
-   → 「どのブラウザで発生しますか？」「スクリーンショットはありますか？」と逆質問
+Layer 3: Docker サンドボックス
+  → AIのコード生成・実行をコンテナ内に隔離
+  → ファイルシステムとネットワークの分離
 
-4. ユーザーが「Chrome、iPhoneでも。SS無し」と返答
+Layer 4: 静的解析
+  → PR作成前にLint / Formatter / 型チェック実行
+  → 将来: CodeQL / Semgrep 統合
 
-5. Issue Refiner が構造化Issue生成
-   → タイトル: "ログイン画面のボタンレイアウト崩れ修正"
-   → ラベル: bug, frontend, priority:medium
+Layer 5: AI Code Review
+  → Reviewer Agent + Codex CLI による自動レビュー
 
-6. GitHub Issue Manager がIssueを作成
-   → Discord に「Issue #42 を作成しました」と通知
-
-7. Cron Scheduler が22:00にキュー処理を開始
-
-8. [Phase 2] AI Coder Agent がIssue #42を処理
-   → 現在はスタブ：「AI Coderは未実装です」と通知
-
-9. Notifier がDiscordに結果を通知
+Layer 6: GitHub ブランチ保護
+  → main への force push 禁止
+  → 必須CI、必須レビュー
+  → 変更範囲制限
 ```
+
+### 監査ログ
+
+ジョブ単位で以下を記録:
+- 誰が依頼したか（Discord userId）
+- どのプロジェクトか（guildId → slug）
+- AIが何を実行したか（ツール使用ログ）
+- どのPRが作られたか
+- コスト・実行時間
+
+## レート制限・コスト管理
+
+### Claude Max サブスク枠の注意点
+
+- 5時間ごとにリセットされるセッション上限がある
+- Claude Code と Claude 本体の使用量は共通枠
+- 週次上限あり（Anthropic裁量で変動）
+
+### 対策
+
+- バッチ分散（一度に処理するジョブ数を制限）
+- モデル選択の最適化（Haiku/Sonnet/Opus の使い分け）
+- `maxBudgetUsd` で1ジョブあたりの上限設定
+- 日次/週次コストレポートをDiscordに投稿
+- 閾値超過時のアラート
 
 ## 技術選定理由
 
 | 選定 | 理由 |
 |------|------|
-| **discord.js** | Discord Bot の定番ライブラリ、TypeScript対応、豊富なドキュメント |
-| **Octokit** | GitHub公式のREST APIクライアント、TypeScript型定義完備 |
-| **Claude Code CLI/SDK** | サブスク枠で動作、API Key不要。CLIとSDKのデュアルモード対応 |
-| **node-cron** | 軽量なCronジョブライブラリ、依存なし |
+| **discord.js** | Discord Bot の定番ライブラリ、TypeScript対応 |
+| **gh CLI** | トークン不要、`gh auth login` の認証セッションを使用、`--repo` でマルチリポ対応 |
+| **Claude Code CLI** | 軽量な1ショット処理、サブスク枠で動作 |
+| **Claude Agent SDK** | 予算制御・進捗通知・セッション管理・危険コマンドブロック |
+| **Codex CLI** | レビュー用 |
+| **node-cron** | 軽量なCronジョブライブラリ |
+| **Docker** | AI実行環境のサンドボックス化 |
 | **Tailscale** | ゼロコンフィグVPN、NAT越え不要 |
 
-## セキュリティ考慮事項
+---
 
-- Discord Bot Token → 環境変数 (`DISCORD_BOT_TOKEN`)
-- GitHub Token → 環境変数 (`GITHUB_TOKEN`)
-- `.env` ファイルは `.gitignore` に含める
-- Tailscaleネットワーク内のみアクセス可能
-- LLMはローカル実行（Claude Code CLI）、外部APIキー不要
+## Phase 詳細
+
+### Phase 2: コード簡素化 + マルチプロジェクト基盤
+
+**目的**: 決定事項を既存コードに反映し、マルチプロジェクト対応の土台を作る。
+
+```
+2-1. LLM層リファクタ
+     - llm/index.ts の mode分岐削除
+     - claude-sdk.ts → agent.ts にリネーム
+     - LLM_MODE 環境変数廃止
+     - config.ts から llm.mode 削除
+
+2-2. 通知・Embed共通化
+     - bot/theme.ts 新設（カラー・絵文字・Embed生成ヘルパー）
+     - notifier.ts → notify() 1関数に統合
+     - commands/* の Embed生成を theme.ts 経由に
+
+2-3. マルチプロジェクト対応
+     - projects.json 導入（プロジェクト登録）
+     - config.ts: guildId/channelId 削除 → projects読み込み
+     - github/issues.ts: 全関数に repo パラメータ追加
+     - processor.ts: enqueue() に repository 必須化、getRepoSlug() 削除
+     - scheduler.ts: handler に repository パラメータ追加
+     - bot/commands/*: guildId → project 解決
+     - bot/events/messageCreate.ts: DM時のプロジェクト選択
+     - notifier.ts: プロジェクト別チャンネル通知
+     - bot/index.ts: 全サーバーにコマンド登録
+
+2-4. ビルド確認
+     - npm run build
+     - npm run typecheck
+```
+
+### Phase 3: セキュリティ基盤 + ガードレール
+
+**目的**: AI Coder を動かす前の必須安全策を構築。
+
+```
+3-1. Docker サンドボックス化
+     - AI Coder 実行用の Dockerfile 作成
+     - ファイルシステム・ネットワークの制限設定
+     - ホスト ↔ コンテナ間のファイル共有設定
+
+3-2. canUseTool / Hooks 定義
+     - 危険コマンドのブロックリスト定義
+     - .env / credentials への書き込み防止
+     - 重要ファイル保護リスト
+     - PreToolUse / PostToolUse Hooks
+
+3-3. 入力サニタイズ
+     - Discord入力のバリデーション
+     - プロンプトインジェクション対策
+
+3-4. GitHub ブランチ保護
+     - リポジトリごとのブランチ保護ルール設定
+     - 必須CI、必須レビュー
+     - PRサイズ上限の設定
+
+3-5. 監査ログ
+     - ジョブ単位の実行ログ構造定義
+     - ログ出力の実装
+```
+
+### Phase 4: AI Coder Agent 実装
+
+**目的**: Issue → コード → テスト → PR の自律フロー構築。
+
+```
+4-1. ai-coder-agent リポジトリ作成
+     - Agent SDK ベースのプロジェクト初期化
+     - .claude/agents/ でサブエージェント定義
+       - planner.md / coder.md / reviewer.md / tester.md
+
+4-2. 計画承認チェックポイント
+     - Planner Agent が実装計画を生成
+     - Discord通知（Embed + ボタン）
+     - 人間が承認 → コード生成開始
+
+4-3. コード生成 + テスト自動実行
+     - Docker サンドボックス内で実行
+     - ビルド → 既存テスト → 失敗時自動修正（最大3回）
+     - Tester Agent によるテスト自動生成
+     - Lint / Formatter 実行
+
+4-4. Git チェックポイント + ロールバック
+     - 各ステップ後にチェックポイント commit
+     - 失敗時は git reset でクリーン状態に復帰
+     - 3回失敗 → 人間にエスカレーション
+
+4-5. PR作成 + レビュー
+     - Draft PR 作成
+     - Reviewer Agent + Codex CLI でレビュー
+     - レビュー結果を PR コメントに投稿
+
+4-6. issue-ai-bot との連携
+     - processHandler から ai-coder-agent を呼び出し
+     - maxBudgetUsd で予算制御
+     - 完了時のコスト・実行時間通知
+```
+
+### Phase 5: Discord UX強化
+
+**目的**: リアルタイム進捗表示・インタラクティブ操作。
+
+```
+5-1. Thread化
+     - Issue処理ごとに Discord Thread を作成
+     - 中間結果を Thread 内に投稿
+
+5-2. ボタン操作
+     - 計画承認: [承認] [修正依頼] [キャンセル]
+     - PR完了: [マージ承認] [フィードバック]
+
+5-3. リアルタイム進捗
+     - includePartialMessages でステージ通知
+     - Embed edit で進捗バー更新
+
+5-4. DM マルチプロジェクト対応
+     - 複数サーバー参加時のプロジェクト選択 UI
+```
+
+### Phase 6: 運用強化
+
+**目的**: コスト管理・可用性・監視。
+
+```
+6-1. コスト追跡
+     - total_cost_usd / modelUsage の記録・蓄積
+     - 日次/週次コストレポートを Discord に投稿
+     - 閾値超過アラート
+
+6-2. レート制限対策
+     - バッチ分散（同時実行数制限）
+     - 5時間枠を考慮したスケジューリング
+     - モデル選択の最適化
+
+6-3. キュー強化
+     - 冪等性の確保
+     - 再試行制御（exponential backoff）
+     - SQLite 移行の検討
+
+6-4. Observability
+     - 構造化ログの強化
+     - ジョブ単位のメトリクス
+     - 失敗要因の可視化ダッシュボード
+
+6-5. バックアップ・復旧
+     - MacBook 障害時の復旧手順
+     - 設定・キューデータのバックアップ
+```

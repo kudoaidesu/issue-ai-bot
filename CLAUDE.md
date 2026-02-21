@@ -30,10 +30,36 @@
 - **ランタイム**: Node.js + TypeScript
 - **Discord Bot**: discord.js
 - **GitHub連携**: `gh` CLI（トークン不要、`gh auth login` の認証セッションを使用）
-- **LLM**: Claude Code CLI (`claude -p`) / Agent SDK — サブスク枠で動作、API Key不要
+- **LLM**: Claude Code CLI / Agent SDK / Codex CLI — 用途ベースで使い分け
 - **Cronジョブ**: node-cron
+- **サンドボックス**: Docker（AI Coder 実行環境）
 - **ネットワーク**: Tailscale（外部アクセス）
 - **テスト**: Vitest（ユニット）
+
+## LLM使い分けポリシー
+
+グローバルな `LLM_MODE` 切り替えは廃止。呼び出し元が用途に応じて選択する。
+
+| ファイル | ツール | 用途 |
+|---------|-------|------|
+| `llm/claude.ts` | Claude CLI (`claude -p`) | 軽量な1ショット処理（Issue精緻化など） |
+| `llm/agent.ts` | Agent SDK | 予算制御・進捗通知・セッション管理・危険コマンドブロック（AI Coder） |
+| `llm/codex.ts` (将来) | Codex CLI | コードレビュー |
+
+**モデルは呼び出し元が指定する:**
+- Issue精緻化 → sonnet
+- 計画生成 → opus
+- コード生成 → sonnet
+- テスト生成 → haiku
+- レビュー → codex
+
+## マルチプロジェクト設計
+
+- **プロジェクトごとにDiscordサーバーを分ける**
+- **Botは1つ**、複数サーバーに参加
+- **guildId でプロジェクトを自動特定**（`projects.json` で登録）
+- 各プロジェクトリポジトリの **CLAUDE.md** がAIのコンテキスト管理の中心
+- プロジェクト追加 = `projects.json` 追記 + Bot招待 + CLAUDE.md配置（コード変更ゼロ）
 
 ## ブランチ戦略
 
@@ -71,6 +97,9 @@ claude setup-token
 brew install gh
 gh auth login
 
+# 必須: Docker（AI Coder サンドボックス用）
+brew install --cask docker
+
 # Discord Bot Tokenは .env に記載
 ```
 
@@ -84,26 +113,27 @@ src/
 │   ├── commands/      # スラッシュコマンド (issue, status, queue, run, cron)
 │   ├── events/        # Discordイベントハンドラ (messageCreate)
 │   ├── index.ts       # Bot初期化
-│   └── notifier.ts    # Discord通知（リッチEmbed）
+│   ├── theme.ts       # カラー・絵文字・Embed生成（共通化）
+│   └── notifier.ts    # Discord通知（notify() 1関数）
 ├── cli/               # CLIツール
 │   ├── index.ts       # CLI エントリーポイント
 │   └── setup.ts       # 対話式セットアップウィザード
 ├── github/            # GitHub連携
-│   └── issues.ts      # Issue CRUD（gh CLI経由）
-├── llm/               # LLM抽象化レイヤー
-│   ├── index.ts       # 共通インターフェース
-│   ├── claude-cli.ts  # Claude Code CLI モード
-│   └── claude-sdk.ts  # Agent SDK モード
+│   └── issues.ts      # Issue CRUD（gh CLI経由、マルチリポ対応）
+├── llm/               # LLMレイヤー（用途ベース使い分け）
+│   ├── claude.ts      # Claude CLI — 軽量1ショット
+│   └── agent.ts       # Agent SDK — 予算制御・進捗・セッション
 ├── queue/             # ジョブキュー
-│   ├── processor.ts   # キュー処理（JSON永続化）
+│   ├── processor.ts   # キュー管理（JSON永続化、repository必須）
 │   └── scheduler.ts   # Cronスケジューラ
 ├── utils/             # ユーティリティ
 │   └── logger.ts      # 構造化ログ
-├── config.ts          # 設定管理（Discord Token + 動作設定のみ）
+├── config.ts          # 設定管理（Discord Token + 動作設定）
+├── projects.json      # プロジェクト登録（guildId, repo, localPath）
 └── index.ts           # エントリーポイント
 
 docs/                  # ドキュメント
-├── architecture.md    # アーキテクチャ設計
+├── architecture.md    # アーキテクチャ設計（Phase 1-6）
 └── setup.md           # セットアップ手順
 ```
 
@@ -123,44 +153,60 @@ docs/                  # ドキュメント
     │                                     │
     └── Discord ── Tailscale ──── Discord Bot (discord.js)
                                           │
+                                  guildId → projects.json 逆引き
+                                          │
                                   ┌───────┴───────┐
                                   │ Issue Refiner  │ ← 曖昧な指示を精緻化
-                                  │ (claude -p)    │ ← 不足情報は逆質問
+                                  │ (claude CLI)   │ ← 不足情報は逆質問
                                   └───────┬───────┘
                                           │
                                   ┌───────┴───────┐
-                                  │ GitHub Issue   │ ← 構造化されたIssue作成
-                                  │ (gh CLI)       │ ← トークン不要
+                                  │ GitHub Issue   │ ← gh --repo でマルチリポ対応
+                                  │ (gh CLI)       │
                                   └───────┬───────┘
                                           │
                                   ┌───────┴───────┐
-                                  │ Job Queue      │ ← Cronで夜間バッチ処理
-                                  │ (node-cron)    │
+                                  │ Job Queue      │ ← 共有キュー（全プロジェクト）
+                                  │ (node-cron)    │ ← Cronで夜間バッチ処理
                                   └───────┬───────┘
                                           │
                                   ┌───────┴───────┐
-                                  │ AI Coder       │ ← Issue→コード→PR
-                                  │ (claude -p)    │
+                                  │ AI Coder       │ ← Docker サンドボックス内
+                                  │ (Agent SDK)    │ ← claude -p --cwd で自動コンテキスト
                                   └───────┬───────┘
                                           │
-                                  └── 結果通知 → Discord
+                                  └── 結果通知 → プロジェクト別 Discord サーバー
 ```
 
 ## LLM利用ポリシー
 
-本プロジェクトは **Claude Code CLI (`claude -p`) / Agent SDK** をサブスク枠で使用する。
+本プロジェクトは **Claude Code CLI / Agent SDK / Codex CLI** をサブスク枠で使用する。
 
 **OK（サブスク範囲内）:**
 - 公式SDK/CLIを使ったローカル・個人用の自動化
-- 個人マシン上でのcron実行、Discord/Slack連携（自分だけが使う場合）
+- 個人マシン上でのcron実行、Discord連携（自分だけが使う場合）
 
 **NG（ToS違反）:**
-- OAuthトークンを抜き出して第三者ツールに渡す（OpenClaw方式）
+- OAuthトークンを抜き出して第三者ツールに渡す
 - 他人に配布・公開サービス化する場合はAPIキー（従量課金）に移行が必要
 
-**スケール時の注意:**
-- ビジネス化・公開時 → Claude Console APIキーに切り替え
-- 24/7大量トークン消費 → 共有リミットに注意
+**レート制限の注意:**
+- Max枠は5時間ごとにリセットされるセッション上限あり
+- Claude Code と Claude 本体の使用量は共通枠
+- 夜間バッチはジョブ分散・モデル選択最適化が必要
+
+## 実装フェーズ
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| 1 | Issue精緻化 & キューイング | **完了** |
+| 2 | コード簡素化 + マルチプロジェクト基盤 | 未実装 |
+| 3 | セキュリティ基盤 + ガードレール | 未実装 |
+| 4 | AI Coder Agent（コード生成→PR作成） | 未実装 |
+| 5 | Discord UX強化 | 未実装 |
+| 6 | 運用強化 | 未実装 |
+
+詳細は `docs/architecture.md` を参照。
 
 ## ドキュメント参照
 
