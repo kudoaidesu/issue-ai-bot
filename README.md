@@ -1,74 +1,98 @@
-# Claude Code Template
+# Issue AI Bot
 
-Next.js + Supabase プロジェクト向けの Claude Code テンプレートリポジトリ。
+Issue駆動 × AI駆動の自律型開発ワークフロー。Discordから指示を出すと、AIがIssueを精緻化し、夜間にキュー処理してPRを自動生成する。
 
-## 含まれるもの
+## コンセプト
 
-### Claude Code 設定
-- `CLAUDE.md` - プロジェクトルール（汎用化済み、要カスタマイズ）
-- `.claude/settings.json` - 共有パーミッション設定
-- `.claude/commands/` - カスタムコマンド（commit, pr, test）
-- `.claude/rules/` - ルール（Skill/Subagent活用）
-- `.claude/skills/` - 37+ スキルライブラリ
+```
+人間（Discord）→ Issue Refiner AI → GitHub Issue → Cron Queue → AI Coder → PR作成
+```
 
-### MCP サーバー設定
-- `.mcp.json` - Playwright / Context7 / Gemini Google Search
+1. **Discord経由で指示**: スマホや別PCからメモ・修正依頼を送信
+2. **Issue精緻化**: AIが曖昧な指示を構造化し、不足情報は逆質問
+3. **キュー管理**: 整備されたIssueをキューに登録
+4. **夜間バッチ処理**: Cronで夜間にAIがIssueを順次処理
+5. **結果通知**: PR作成後にDiscordで通知
 
-### スキル一覧（カテゴリ別）
+## 設計思想: CLI-First
 
-| カテゴリ | スキル |
-|---------|--------|
-| Next.js/React | nextjs-best-practices, nextjs-supabase-auth, vercel-react-best-practices |
-| Supabase | supabase-auth, supabase-best-practices |
-| UI/Design | shadcn-ui, tailwind-design-system, frontend-design, design-polish |
-| テスト | e2e-test-principles, vitest-unit-test, vitest-coverage, vitest-bench, webapp-testing |
-| レビュー | performance-review, security-review, sre-review |
-| リサーチ | academic-trend-research, oss-code-research |
-| インフラ | pre-deploy-checklist, infra-cost-estimate |
-| ツール | skill-creator, skill-usage-tracker, mcp-builder, learning-capture |
+外部サービスのトークンを環境変数で管理しない。各CLIの認証セッションをそのまま利用する。
 
-## 使い方
+| サービス | アクセス手段 | 認証 |
+|---------|-------------|------|
+| GitHub | `gh` CLI | `gh auth login` |
+| Claude | `claude` CLI / Agent SDK | `claude setup-token` |
+| Discord | discord.js SDK | Bot Token（.env — SDK要件により必須） |
 
-### 1. テンプレートからリポジトリを作成
+## アーキテクチャ
 
-GitHub の "Use this template" ボタンをクリック。
+```
+[スマホ/別PC]                     [MacBook 2018 サーバー]
+    │                                     │
+    └── Discord ── Tailscale ──── Discord Bot (discord.js)
+                                          │
+                                  ┌───────┴───────┐
+                                  │ Issue Refiner  │
+                                  │ (claude -p)    │
+                                  └───────┬───────┘
+                                          │
+                                  ┌───────┴───────┐
+                                  │ GitHub Issue   │
+                                  │ (gh CLI)       │
+                                  └───────┬───────┘
+                                          │
+                                  ┌───────┴───────┐
+                                  │ Cron Queue     │
+                                  │ (node-cron)    │
+                                  └───────┬───────┘
+                                          │
+                                  ┌───────┴───────┐
+                                  │ AI Coder       │
+                                  │ (claude -p)    │
+                                  └───────┴───────┘
+                                          │
+                                  └── Discord 通知
+```
 
-### 2. セットアップ
+## 技術スタック
+
+| カテゴリ | 技術 |
+|---------|------|
+| ランタイム | Node.js + TypeScript |
+| Discord Bot | discord.js |
+| GitHub連携 | `gh` CLI（トークン不要） |
+| LLM | Claude Code CLI / Agent SDK（サブスク枠） |
+| Cronジョブ | node-cron |
+| ネットワーク | Tailscale |
+| テスト | Vitest |
+
+## 前提ツール
 
 ```bash
-# クローン
-git clone <your-repo-url>
-cd <your-repo>
+# Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+claude setup-token
 
-# CLAUDE.md をプロジェクトに合わせて編集
-# - 技術スタック
-# - ディレクトリ構造
-# - プロジェクト概要
-# - 実行コマンド
+# GitHub CLI
+brew install gh
+gh auth login
 
-# .mcp.json の Gemini API キーを設定
-# GEMINI_API_KEY を自分のキーに置き換え
+# Node.js >= 20
 ```
 
-### 3. ローカル設定（gitignore対象）
+## セットアップ
 
-`.claude/settings.local.json` は各開発者がローカルで作成：
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(git *)",
-      "Bash(npm *)",
-      "Skill(*)"
-    ]
-  }
-}
+```bash
+npm install
+npm run setup   # 対話式セットアップ（.env作成）
+npm run dev     # 開発モードで起動
 ```
 
-## カスタマイズ
+詳細は [docs/setup.md](docs/setup.md) を参照。
 
-- `CLAUDE.md`: プロジェクト固有のルール・概要を記述
-- `.claude/skills/`: プロジェクト固有のスキルを追加
-- `.claude/commands/`: カスタムコマンドを追加・編集
-- `.mcp.json`: 必要なMCPサーバーを追加
+## ドキュメント
+
+| ドキュメント | 内容 |
+|-------------|------|
+| [docs/architecture.md](docs/architecture.md) | アーキテクチャ設計詳細 |
+| [docs/setup.md](docs/setup.md) | セットアップ手順 |

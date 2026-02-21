@@ -8,21 +8,22 @@
 node_modules/
 
 # Build
-.next/
-out/
 dist/
 
 # Testing
 test-results/
-playwright-report/
-.playwright-mcp/
-playwright/.cache/
 coverage/
 
 # Environment
 .env
 .env.local
 .env.*.local
+
+# Data (runtime queue state)
+data/
+
+# Logs
+logs/
 
 # OS
 .DS_Store

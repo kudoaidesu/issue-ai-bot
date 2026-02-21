@@ -1,0 +1,236 @@
+<mxfile host="app.diagrams.net" modified="2026-02-21T12:00:00.000Z" agent="Claude Code" version="24.0.0" type="device">
+  <diagram id="issue-ai-bot-arch" name="アーキテクチャ">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- 外部デバイス群 -->
+        <mxCell id="ext-group" value="外部デバイス" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=5;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="30" y="80" width="200" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="phone" value="&#x1f4f1; スマホ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="pc" value="&#x1f4bb; 別PC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="60" y="180" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="discord-app" value="Discord App" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7289da;strokeColor=#5865F2;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="140" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Tailscale -->
+        <mxCell id="tailscale" value="Tailscale VPN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="200" width="120" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- MacBook サーバー -->
+        <mxCell id="server-group" value="MacBook 2018 サーバー (常時稼働)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#333333;fontColor=#333333;fontSize=13;fontStyle=1;verticalAlign=top;spacingTop=8;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="450" y="30" width="680" height="760" as="geometry"/>
+        </mxCell>
+
+        <!-- Discord Bot -->
+        <mxCell id="bot" value="Discord Bot&#xa;(discord.js)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5865F2;strokeColor=#4752C4;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="80" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="bot-commands" value="/issue /status /queue&#xa;/run /cron + DM対話" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="490" y="150" width="180" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Issue Refiner -->
+        <mxCell id="refiner" value="Issue Refiner&#xa;(claude -p)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d4a574;strokeColor=#b8860b;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="240" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="refiner-desc" value="曖昧な入力 → 逆質問&#xa;→ 構造化Issue生成" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="490" y="310" width="180" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- GitHub Issue Manager -->
+        <mxCell id="github" value="GitHub Issue Manager&#xa;(Octokit)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#24292e;strokeColor=#1b1f23;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="400" width="180" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Job Queue -->
+        <mxCell id="queue" value="Job Queue&#xa;(JSON永続化)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="520" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="queue-file" value="data/queue.json" style="shape=document;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="700" y="520" width="120" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Cron Scheduler -->
+        <mxCell id="cron" value="Cron Scheduler&#xa;(node-cron)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="630" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="cron-desc" value="22:00 キュー処理&#xa;08:00 レポート" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="700" y="630" width="140" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- AI Coder Agent (Phase 2) -->
+        <mxCell id="coder" value="AI Coder Agent&#xa;(claude -p)&#xa;[Phase 2 - 未実装]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="820" y="350" width="180" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="coder-desc" value="Issue → コード生成&#xa;→ テスト → PR作成" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="820" y="440" width="180" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Notifier -->
+        <mxCell id="notifier" value="Notifier&#xa;(リッチEmbed)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5865F2;strokeColor=#4752C4;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="80" width="160" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- CLI Setup -->
+        <mxCell id="cli" value="CLI Setup&#xa;npm run setup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="180" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Claude Code -->
+        <mxCell id="claude" value="Claude Code CLI&#xa;(Maxサブスク枠)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d4a574;strokeColor=#b8860b;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="250" width="180" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- 矢印: 外部→Tailscale -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#5865F2;" edge="1" parent="1" source="discord-app" target="tailscale">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1-label" value="Discord API" style="edgeLabel;html=1;fontSize=10;fontColor=#5865F2;" vertex="1" connectable="0" parent="e1">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Tailscale→Bot -->
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;" edge="1" parent="1" source="tailscale" target="bot">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- 矢印: Bot→Refiner -->
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="bot-commands" target="refiner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3-label" value="ユーザー入力" style="edgeLabel;html=1;fontSize=10;" vertex="1" connectable="0" parent="e3">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Refiner→Claude -->
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#b8860b;" edge="1" parent="1" source="refiner" target="claude">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4-label" value="claude -p" style="edgeLabel;html=1;fontSize=10;fontColor=#b8860b;" vertex="1" connectable="0" parent="e4">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Refiner→逆質問(Bot) -->
+        <mxCell id="e4b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=1;strokeColor=#b8860b;dashed=1;dashPattern=5 5;" edge="1" parent="1" source="refiner-desc" target="bot">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="470" y="330"/>
+              <mxPoint x="470" y="110"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4b-label" value="逆質問" style="edgeLabel;html=1;fontSize=10;fontColor=#b8860b;" vertex="1" connectable="0" parent="e4b">
+          <mxGeometry x="-0.5" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Refiner→GitHub -->
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="refiner-desc" target="github">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5-label" value="Issue作成" style="edgeLabel;html=1;fontSize=10;" vertex="1" connectable="0" parent="e5">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: GitHub→Queue -->
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="github" target="queue">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6-label" value="エンキュー" style="edgeLabel;html=1;fontSize=10;" vertex="1" connectable="0" parent="e6">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Queue→queue.json -->
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=1;strokeColor=#666666;dashed=1;" edge="1" parent="1" source="queue" target="queue-file">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- 矢印: Cron→Queue -->
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="cron" target="queue">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8-label" value="定時処理" style="edgeLabel;html=1;fontSize=10;fontColor=#82b366;" vertex="1" connectable="0" parent="e8">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Queue→Coder (Phase 2) -->
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#b85450;dashed=1;dashPattern=5 5;" edge="1" parent="1" source="queue" target="coder">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="680" y="550"/>
+              <mxPoint x="780" y="550"/>
+              <mxPoint x="780" y="390"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-label" value="Phase 2" style="edgeLabel;html=1;fontSize=10;fontColor=#b85450;" vertex="1" connectable="0" parent="e9">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- 矢印: Coder→Claude -->
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=1;strokeColor=#b85450;dashed=1;dashPattern=5 5;" edge="1" parent="1" source="coder" target="claude">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- 矢印: Notifier→Bot -->
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#5865F2;" edge="1" parent="1" source="notifier" target="bot">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11-label" value="Embed通知" style="edgeLabel;html=1;fontSize=10;fontColor=#5865F2;" vertex="1" connectable="0" parent="e11">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- Phone→Discord -->
+        <mxCell id="e0a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=1;strokeColor=#9673a6;" edge="1" parent="1" source="phone" target="discord-app">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=1;strokeColor=#9673a6;" edge="1" parent="1" source="pc" target="discord-app">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- 凡例 -->
+        <mxCell id="legend-title" value="凡例" style="text;html=1;fontSize=13;fontStyle=1;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="30" y="360" width="60" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-1" value="" style="rounded=1;fillColor=#5865F2;strokeColor=#4752C4;" vertex="1" parent="1">
+          <mxGeometry x="30" y="395" width="20" height="15" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-1t" value="Discord" style="text;html=1;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="55" y="390" width="80" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-2" value="" style="rounded=1;fillColor=#d4a574;strokeColor=#b8860b;" vertex="1" parent="1">
+          <mxGeometry x="30" y="420" width="20" height="15" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-2t" value="AI (Claude Code)" style="text;html=1;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="55" y="415" width="120" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-3" value="" style="rounded=1;fillColor=#24292e;strokeColor=#1b1f23;" vertex="1" parent="1">
+          <mxGeometry x="30" y="445" width="20" height="15" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-3t" value="GitHub" style="text;html=1;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="55" y="440" width="80" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-4" value="" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="30" y="470" width="20" height="15" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-4t" value="キュー/Cron" style="text;html=1;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="55" y="465" width="100" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-5" value="" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="30" y="495" width="20" height="15" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-5t" value="Phase 2 (未実装)" style="text;html=1;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="55" y="490" width="120" height="25" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

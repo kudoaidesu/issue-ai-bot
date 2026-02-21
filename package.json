@@ -1,0 +1,32 @@
+{
+  "name": "issue-ai-bot",
+  "version": "0.1.0",
+  "description": "Issue駆動 × AI駆動の自律型開発ワークフロー",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "setup": "tsx src/cli/index.ts setup",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.0",
+    "dotenv": "^16.4.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
