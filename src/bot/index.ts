@@ -15,6 +15,7 @@ import { handleMessage } from './events/messageCreate.js'
 import { handleGuildChat } from './events/guildChat.js'
 import { handleButtonInteraction } from './events/buttonHandler.js'
 import { handleSelectMenuInteraction } from './events/selectMenuHandler.js'
+import { checkModelListFreshness } from './chat-model.js'
 
 // コマンドのインポート
 import * as issueCmd from './commands/issue.js'
@@ -24,6 +25,7 @@ import * as runCmd from './commands/run.js'
 import * as cronCmd from './commands/cron.js'
 import * as costCmd from './commands/cost.js'
 import * as usageCmd from './commands/usage.js'
+import * as modelCmd from './commands/model.js'
 
 const log = createLogger('bot')
 
@@ -33,7 +35,7 @@ interface Command {
 }
 
 const commands = new Collection<string, Command>()
-const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, costCmd, usageCmd]
+const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, costCmd, usageCmd, modelCmd]
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd)
@@ -69,6 +71,7 @@ export async function startBot(): Promise<Client> {
     void Promise.all(registrations)
 
     initNotifier(client)
+    checkModelListFreshness()
   })
 
   client.on(Events.InteractionCreate, async (interaction) => {
