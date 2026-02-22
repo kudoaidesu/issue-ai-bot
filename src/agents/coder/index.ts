@@ -3,6 +3,7 @@ import { runClaudeCli } from '../../llm/claude-cli.js'
 import { addComment } from '../../github/issues.js'
 import { createLogger } from '../../utils/logger.js'
 import { appendAudit } from '../../utils/audit.js'
+import { recordCost } from '../../utils/cost-tracker.js'
 import type { CoderAgentInput, CoderAgentResult } from './types.js'
 import { CODER_SYSTEM_PROMPT, buildUserPrompt } from './prompt.js'
 import {
@@ -108,6 +109,16 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
         result: 'allow',
       })
 
+      recordCost({
+        issueNumber: issue.number,
+        repository: project.repo,
+        costUsd: totalCostUsd,
+        durationMs,
+        success: true,
+        prUrl,
+        retryCount: attempt,
+      })
+
       log.info(`Coder agent completed for Issue #${issue.number}: ${prUrl}`)
 
       void input.onProgress?.({
@@ -168,6 +179,15 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
     actor: 'coder-agent',
     detail: `Issue #${issue.number}: ${error} (cost: $${totalCostUsd.toFixed(2)}, duration: ${Math.round(durationMs / 1000)}s)`,
     result: 'error',
+  })
+
+  recordCost({
+    issueNumber: issue.number,
+    repository: project.repo,
+    costUsd: totalCostUsd,
+    durationMs,
+    success: false,
+    retryCount: maxRetries,
   })
 
   // Issue に失敗コメントを追加

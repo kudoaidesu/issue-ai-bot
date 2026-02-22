@@ -2,6 +2,9 @@ import cron, { type ScheduledTask } from 'node-cron'
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 import { dequeue, getStats, updateStatus } from './processor.js'
+import { acquireLock, releaseLock, isDailyBudgetExceeded } from './rate-limiter.js'
+import { getDailyCost, getCostReport } from '../utils/cost-tracker.js'
+import { notifyCostReport, notifyCostAlert } from '../bot/notifier.js'
 
 const log = createLogger('scheduler')
 
@@ -15,49 +18,98 @@ export function setProcessHandler(handler: QueueProcessHandler): void {
   processHandler = handler
 }
 
-async function processQueue(): Promise<void> {
-  const stats = getStats()
-  log.info(`Queue processing started — ${stats.pending} pending items`)
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
-  if (stats.pending === 0) {
-    log.info('No pending items. Skipping.')
+async function processQueue(): Promise<void> {
+  if (!acquireLock()) {
+    log.warn('Queue processing already in progress. Skipping.')
     return
   }
 
-  let item = dequeue()
-  while (item) {
-    log.info(`Processing Issue #${item.issueNumber} (${item.id})`)
+  try {
+    const stats = getStats()
+    log.info(`Queue processing started — ${stats.pending} pending items`)
 
-    if (processHandler) {
-      try {
-        await processHandler(item.issueNumber, item.repository)
-        updateStatus(item.id, 'completed')
-        log.info(`Issue #${item.issueNumber} completed`)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        updateStatus(item.id, 'failed', message)
-        log.error(`Issue #${item.issueNumber} failed: ${message}`)
-      }
-    } else {
-      log.warn('No process handler registered. Skipping item.')
-      updateStatus(item.id, 'pending')
-      break
+    if (stats.pending === 0) {
+      log.info('No pending items. Skipping.')
+      return
     }
 
-    item = dequeue()
-  }
+    // 予算ガード: バッチ開始前
+    if (isDailyBudgetExceeded()) {
+      log.warn('Daily budget exceeded. Skipping queue processing.')
+      for (const project of config.projects) {
+        await notifyCostAlert(getDailyCost(), config.queue.dailyBudgetUsd, project.channelId)
+      }
+      return
+    }
 
-  const after = getStats()
-  log.info(
-    `Queue processing done — completed: ${after.completed}, failed: ${after.failed}`,
-  )
+    const maxBatch = config.queue.maxBatchSize
+    const cooldownMs = config.queue.cooldownMs
+    let processed = 0
+
+    let item = dequeue()
+    while (item && processed < maxBatch) {
+      // 予算ガード: 各ジョブ前
+      if (isDailyBudgetExceeded()) {
+        log.warn('Daily budget exceeded mid-batch. Stopping.')
+        updateStatus(item.id, 'pending')
+        for (const project of config.projects) {
+          await notifyCostAlert(getDailyCost(), config.queue.dailyBudgetUsd, project.channelId)
+        }
+        break
+      }
+
+      log.info(`Processing Issue #${item.issueNumber} (${item.id}) [${processed + 1}/${maxBatch}]`)
+
+      if (processHandler) {
+        try {
+          await processHandler(item.issueNumber, item.repository)
+          updateStatus(item.id, 'completed')
+          log.info(`Issue #${item.issueNumber} completed`)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          updateStatus(item.id, 'failed', message)
+          log.error(`Issue #${item.issueNumber} failed: ${message}`)
+        }
+      } else {
+        log.warn('No process handler registered. Skipping item.')
+        updateStatus(item.id, 'pending')
+        break
+      }
+
+      processed++
+
+      // Cooldown: 次のジョブ前に待機
+      item = dequeue()
+      if (item && processed < maxBatch) {
+        log.info(`Cooldown: waiting ${cooldownMs / 1000}s before next job...`)
+        await sleep(cooldownMs)
+      }
+    }
+
+    const after = getStats()
+    log.info(
+      `Queue processing done — processed: ${processed}, completed: ${after.completed}, failed: ${after.failed}`,
+    )
+  } finally {
+    releaseLock()
+  }
 }
 
-function reportStatus(): void {
+async function reportStatus(): Promise<void> {
   const stats = getStats()
   log.info(
     `[Report] pending=${stats.pending} processing=${stats.processing} completed=${stats.completed} failed=${stats.failed} total=${stats.total}`,
   )
+
+  // コスト + キューレポートを Discord に送信
+  const costReport = getCostReport()
+  for (const project of config.projects) {
+    await notifyCostReport(costReport, stats, project.channelId)
+  }
 }
 
 export function startScheduler(): void {
@@ -73,7 +125,9 @@ export function startScheduler(): void {
 
   const reportTask = cron.schedule(
     config.cron.reportSchedule,
-    reportStatus,
+    () => {
+      void reportStatus()
+    },
     { timezone: 'Asia/Tokyo' },
   )
   tasks.set('status-report', reportTask)
