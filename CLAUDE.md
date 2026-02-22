@@ -111,28 +111,31 @@ src/
 │   ├── issue-refiner/ # Issue精緻化AI（実装済み）
 │   └── coder/         # AI Coder Agent（Issue→コード→Draft PR）
 ├── bot/               # Discord Bot
-│   ├── commands/      # スラッシュコマンド (issue, status, queue, run, cron)
-│   ├── events/        # Discordイベントハンドラ (messageCreate)
-│   ├── index.ts       # Bot初期化
-│   ├── theme.ts       # カラー・絵文字・Embed生成（共通化）
-│   └── notifier.ts    # Discord通知（notify() 1関数）
+│   ├── commands/      # スラッシュコマンド (issue, status, queue, run, cron, cost)
+│   ├── events/        # Discordイベントハンドラ (messageCreate, buttonHandler, selectMenuHandler)
+│   ├── index.ts       # Bot初期化 + インタラクションルーティング
+│   ├── theme.ts       # カラー・絵文字・Embed・ボタン・セレクトメニュー生成
+│   └── notifier.ts    # Discord通知（Thread進捗・コストレポート・アラート）
 ├── cli/               # CLIツール
 │   ├── index.ts       # CLI エントリーポイント
 │   └── setup.ts       # 対話式セットアップウィザード
 ├── github/            # GitHub連携
-│   └── issues.ts      # Issue CRUD（gh CLI経由、マルチリポ対応）
+│   ├── issues.ts      # Issue CRUD（gh CLI経由、マルチリポ対応）
+│   └── pulls.ts       # PR マージ（gh pr merge）
 ├── llm/               # LLMレイヤー（用途ベース使い分け）
 │   ├── claude.ts      # Claude CLI — 軽量1ショット
 │   └── agent.ts       # Agent SDK — 予算制御・進捗・セッション
 ├── queue/             # ジョブキュー
-│   ├── processor.ts   # キュー管理（JSON永続化、repository必須）
-│   └── scheduler.ts   # Cronスケジューラ
+│   ├── processor.ts   # キュー管理（JSON永続化、冪等性、リトライ）
+│   ├── scheduler.ts   # Cronスケジューラ（バッチ制限・予算ガード）
+│   └── rate-limiter.ts # 同時実行ガード + 予算ガード
 ├── security/          # セキュリティ
 │   ├── hooks.ts       # canUseTool コールバック
 │   └── tool-guard.ts  # 危険コマンドブロック
 ├── utils/             # ユーティリティ
 │   ├── logger.ts      # 構造化ログ
 │   ├── audit.ts       # 監査ログ（JSONL）
+│   ├── cost-tracker.ts # コスト追跡（JSONL + 集計）
 │   ├── sanitize.ts    # 入力サニタイズ
 │   └── docker.ts      # Docker サンドボックス
 ├── config.ts          # 設定管理（Discord Token + 動作設定）
@@ -207,11 +210,11 @@ docs/                  # ドキュメント
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | 1 | Issue精緻化 & キューイング | **完了** |
-| 2 | コード簡素化 + マルチプロジェクト基盤 | 未実装 |
-| 3 | セキュリティ基盤 + ガードレール | 未実装 |
-| 4 | AI Coder Agent（コード生成→PR作成） | 未実装 |
-| 5 | Discord UX強化 | 未実装 |
-| 6 | 運用強化 | 未実装 |
+| 2 | コード簡素化 + マルチプロジェクト基盤 | **完了** |
+| 3 | セキュリティ基盤 + ガードレール | **完了** |
+| 4 | AI Coder Agent（コード生成→PR作成） | **完了** |
+| 5 | Discord UX強化（Thread/ボタン/進捗/DM） | **完了** |
+| 6 | 運用強化（コスト/レート制限/キュー強化） | **一部完了** (6-1〜6-3) |
 
 詳細は `docs/architecture.md` を参照。
 
