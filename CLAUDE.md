@@ -108,7 +108,8 @@ brew install --cask docker
 ```
 src/
 ├── agents/            # AIエージェント
-│   └── issue-refiner/ # Issue精緻化AI（実装済み）
+│   ├── issue-refiner/ # Issue精緻化AI（実装済み）
+│   └── coder/         # AI Coder Agent（Issue→コード→Draft PR）
 ├── bot/               # Discord Bot
 │   ├── commands/      # スラッシュコマンド (issue, status, queue, run, cron)
 │   ├── events/        # Discordイベントハンドラ (messageCreate)
@@ -126,8 +127,14 @@ src/
 ├── queue/             # ジョブキュー
 │   ├── processor.ts   # キュー管理（JSON永続化、repository必須）
 │   └── scheduler.ts   # Cronスケジューラ
+├── security/          # セキュリティ
+│   ├── hooks.ts       # canUseTool コールバック
+│   └── tool-guard.ts  # 危険コマンドブロック
 ├── utils/             # ユーティリティ
-│   └── logger.ts      # 構造化ログ
+│   ├── logger.ts      # 構造化ログ
+│   ├── audit.ts       # 監査ログ（JSONL）
+│   ├── sanitize.ts    # 入力サニタイズ
+│   └── docker.ts      # Docker サンドボックス
 ├── config.ts          # 設定管理（Discord Token + 動作設定）
 ├── projects.json      # プロジェクト登録（guildId, repo, localPath）
 └── index.ts           # エントリーポイント
