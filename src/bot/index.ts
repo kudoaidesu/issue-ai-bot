@@ -12,6 +12,7 @@ import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 import { initNotifier } from './notifier.js'
 import { handleMessage } from './events/messageCreate.js'
+import { handleGuildChat } from './events/guildChat.js'
 import { handleButtonInteraction } from './events/buttonHandler.js'
 import { handleSelectMenuInteraction } from './events/selectMenuHandler.js'
 
@@ -121,7 +122,11 @@ export async function startBot(): Promise<Client> {
   })
 
   client.on(Events.MessageCreate, (message) => {
-    void handleMessage(message)
+    if (message.guild) {
+      void handleGuildChat(message)
+    } else {
+      void handleMessage(message)
+    }
   })
 
   await client.login(config.discord.botToken)
