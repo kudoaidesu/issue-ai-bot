@@ -139,9 +139,14 @@ gh pr create --base main --head develop --title "<タイトル>" --body "<本文
 # ※ main への PR はユーザーが手動マージ or 承認後にマージ
 ```
 
+### develop → main PR は常に作成する
+
+feature → develop のマージ完了後、**必ず** develop → main の PR も作成する。
+ユーザーから省略の指示がない限り、このステップをスキップしない。
+
 ### ユーザーが「developまではマージで」と言った場合
 
-feature → develop を直接マージし、develop → main の PR のみ作成する。
+feature → develop を直接マージ（PRなし）し、develop → main の PR を作成する。
 
 ### ユーザーが「コミットとPR作成」とだけ言った場合
 
