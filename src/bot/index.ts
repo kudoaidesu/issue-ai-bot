@@ -22,6 +22,7 @@ import * as queueCmd from './commands/queue.js'
 import * as runCmd from './commands/run.js'
 import * as cronCmd from './commands/cron.js'
 import * as costCmd from './commands/cost.js'
+import * as usageCmd from './commands/usage.js'
 
 const log = createLogger('bot')
 
@@ -31,7 +32,7 @@ interface Command {
 }
 
 const commands = new Collection<string, Command>()
-const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, costCmd]
+const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, costCmd, usageCmd]
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd)

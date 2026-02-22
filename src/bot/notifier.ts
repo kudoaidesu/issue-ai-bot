@@ -4,6 +4,7 @@ import { createLogger } from '../utils/logger.js'
 import { COLORS, createEmbed, createQueueButtons, createPrButtons } from './theme.js'
 import type { ProgressData, ProgressStage } from '../agents/coder/types.js'
 import type { CostReport } from '../utils/cost-tracker.js'
+import type { UsageReport, UsageSnapshot, UsageAlerts } from '../utils/usage-monitor.js'
 
 const log = createLogger('notifier')
 
@@ -141,6 +142,134 @@ export async function notifyError(errorMessage: string, channelId?: string): Pro
   })
 
   await channel.send({ embeds: [embed] })
+}
+
+// --- 使用量レポート ---
+
+function formatClaudeSnapshot(snapshot: UsageSnapshot | null): string {
+  if (!snapshot) return 'データなし'
+  if (snapshot.error) return `**エラー**: ${snapshot.error.slice(0, 200)}`
+
+  const claude = snapshot.claude
+  if (!claude) return snapshot.raw.slice(0, 300) || 'データ取得できませんでした'
+
+  const parts: string[] = []
+
+  // Session
+  if (claude.session) {
+    const s = claude.session
+    const status = s.rateLimited ? '**制限中**' : `${s.usagePercent}%`
+    parts.push(`セッション: ${status}${s.remaining ? ` (残り ${s.remaining})` : ''}`)
+  }
+
+  // Weekly models
+  if (claude.weekly) {
+    for (const m of claude.weekly.models) {
+      const pct = m.usagePercent !== undefined ? `${m.usagePercent}%` : '?%'
+      parts.push(`${m.model}: ${pct}${m.usageText ? ` [${m.usageText}]` : ''}`)
+    }
+    if (claude.weekly.resetAt) {
+      parts.push(`リセット: ${claude.weekly.resetAt}`)
+    }
+    if (claude.weekly.dayOfWeek !== undefined) {
+      parts.push(`週の ${claude.weekly.dayOfWeek + 1} 日目`)
+    }
+  }
+
+  return parts.length > 0 ? parts.join('\n').slice(0, 1024) : 'パース失敗'
+}
+
+function formatCodexSnapshot(snapshot: UsageSnapshot | null): string {
+  if (!snapshot) return 'データなし'
+  if (snapshot.error) return `**エラー**: ${snapshot.error.slice(0, 200)}`
+
+  const codex = snapshot.codex
+  if (!codex) return snapshot.raw.slice(0, 300) || 'データ取得できませんでした'
+
+  const parts: string[] = []
+  if (codex.usagePercent !== undefined) {
+    parts.push(`使用率: **${codex.usagePercent}%**`)
+  }
+  if (codex.usageText) {
+    parts.push(`タスク: ${codex.usageText}`)
+  }
+  if (codex.resetAt) {
+    parts.push(`リセット: ${codex.resetAt}`)
+  }
+
+  return parts.length > 0 ? parts.join('\n').slice(0, 1024) : 'パース失敗'
+}
+
+export async function notifyUsageReport(
+  report: UsageReport,
+  channelId?: string,
+): Promise<void> {
+  const channel = await getChannel(channelId)
+  if (!channel) return
+
+  const fields: Array<{ name: string; value: string; inline?: boolean }> = []
+
+  fields.push({
+    name: 'Claude (Max)',
+    value: formatClaudeSnapshot(report.claude),
+    inline: false,
+  })
+
+  fields.push({
+    name: 'OpenAI Codex',
+    value: formatCodexSnapshot(report.codex),
+    inline: false,
+  })
+
+  const hasErrors = report.claude?.error ?? report.codex?.error
+  const color = hasErrors ? COLORS.error : COLORS.info
+
+  const embed = createEmbed(color, 'LLM 使用量レポート（日次）', {
+    fields,
+    footer: `取得時刻: ${new Date(report.scrapedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
+  })
+
+  await channel.send({ embeds: [embed] })
+  log.info('Daily usage report sent to Discord')
+}
+
+export async function notifyUsageAlert(
+  alerts: UsageAlerts,
+  report: UsageReport,
+  channelId?: string,
+): Promise<void> {
+  if (!alerts.hasAlerts) return
+
+  const channel = await getChannel(channelId)
+  if (!channel) return
+
+  const fields: Array<{ name: string; value: string; inline?: boolean }> = []
+
+  if (alerts.sessionRateLimited) {
+    fields.push({ name: '5h セッション制限', value: alerts.sessionDetail ?? '制限中' })
+  }
+  if (alerts.wakeTimeConflict) {
+    fields.push({ name: '起床時間衝突', value: alerts.wakeTimeDetail ?? '起床時に制限がかかる可能性' })
+  }
+  if (alerts.weeklyPaceExceeded) {
+    fields.push({ name: 'Opus ペース超過', value: alerts.weeklyPaceDetail ?? 'ペース超過' })
+  }
+  if (alerts.sonnetPaceExceeded) {
+    fields.push({ name: 'Sonnet ペース超過', value: alerts.sonnetPaceDetail ?? 'ペース超過' })
+  }
+  if (alerts.codexPaceExceeded) {
+    fields.push({ name: 'Codex ペース超過', value: alerts.codexPaceDetail ?? 'ペース超過' })
+  }
+
+  if (fields.length === 0) return
+
+  const embed = createEmbed(COLORS.warning, 'LLM 使用量アラート', {
+    fields,
+    footer: `取得時刻: ${new Date(report.scrapedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
+  })
+
+  await channel.send({ embeds: [embed] })
+  log.warn(`Usage alert sent: ${fields.map((f) => f.name).join(', ')}`)
 }
 
 // --- Thread 管理 + リアルタイム進捗 ---
