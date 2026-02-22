@@ -12,6 +12,8 @@ import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 import { initNotifier } from './notifier.js'
 import { handleMessage } from './events/messageCreate.js'
+import { handleButtonInteraction } from './events/buttonHandler.js'
+import { handleSelectMenuInteraction } from './events/selectMenuHandler.js'
 
 // コマンドのインポート
 import * as issueCmd from './commands/issue.js'
@@ -68,24 +70,52 @@ export async function startBot(): Promise<Client> {
   })
 
   client.on(Events.InteractionCreate, async (interaction) => {
-    if (!interaction.isChatInputCommand()) return
+    // スラッシュコマンド
+    if (interaction.isChatInputCommand()) {
+      const command = commands.get(interaction.commandName)
+      if (!command) return
 
-    const command = commands.get(interaction.commandName)
-    if (!command) return
+      try {
+        await command.execute(interaction)
+      } catch (err) {
+        log.error(`Command ${interaction.commandName} failed`, err)
+        const reply = {
+          content: 'コマンドの実行中にエラーが発生しました。',
+          ephemeral: true,
+        }
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(reply)
+        } else {
+          await interaction.reply(reply)
+        }
+      }
+      return
+    }
 
-    try {
-      await command.execute(interaction)
-    } catch (err) {
-      log.error(`Command ${interaction.commandName} failed`, err)
-      const reply = {
-        content: 'コマンドの実行中にエラーが発生しました。',
-        ephemeral: true,
+    // ボタン
+    if (interaction.isButton()) {
+      try {
+        await handleButtonInteraction(interaction)
+      } catch (err) {
+        log.error('Button interaction failed', err)
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: 'ボタン処理中にエラーが発生しました。', ephemeral: true })
+        }
       }
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(reply)
-      } else {
-        await interaction.reply(reply)
+      return
+    }
+
+    // セレクトメニュー
+    if (interaction.isStringSelectMenu()) {
+      try {
+        await handleSelectMenuInteraction(interaction)
+      } catch (err) {
+        log.error('Select menu interaction failed', err)
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '選択メニュー処理中にエラーが発生しました。', ephemeral: true })
+        }
       }
+      return
     }
   })
 

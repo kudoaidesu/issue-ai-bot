@@ -6,6 +6,7 @@ import { enqueue } from '../../queue/processor.js'
 import { notifyIssueCreated } from '../notifier.js'
 import { createLogger } from '../../utils/logger.js'
 import { validateDiscordInput, sanitizePromptInput } from '../../utils/sanitize.js'
+import { createProjectSelectMenu } from '../theme.js'
 
 const log = createLogger('dm-handler')
 
@@ -13,6 +14,10 @@ const log = createLogger('dm-handler')
 const activeSessions = new Map<string, string>()
 // DM時のプロジェクト選択を保持（ユーザーID → プロジェクト）
 const userProjects = new Map<string, ProjectConfig>()
+
+export function setUserProject(userId: string, project: ProjectConfig): void {
+  userProjects.set(userId, project)
+}
 
 function resolveProjectForDm(userId: string): ProjectConfig | null {
   // 既に選択済み
@@ -51,25 +56,16 @@ export async function handleMessage(message: Message): Promise<void> {
   // プロジェクト解決
   const project = resolveProjectForDm(userId)
 
-  // 複数プロジェクトで未選択の場合、選択を促す
+  // 複数プロジェクトで未選択の場合、セレクトメニューを表示
   if (!project) {
-    const projectList = config.projects
-      .map((p, i) => `${i + 1}. ${p.slug} (${p.repo})`)
-      .join('\n')
-
-    // 番号入力を処理
-    const num = Number(content)
-    if (num >= 1 && num <= config.projects.length) {
-      userProjects.set(userId, config.projects[num - 1])
-      await message.reply(
-        `プロジェクト「${config.projects[num - 1].slug}」を選択しました。Issueの内容を入力してください。`,
-      )
-      return
-    }
-
-    await message.reply(
-      `プロジェクトを選択してください（番号を入力）:\n${projectList}\n\n(「キャンセル」で中断)`,
+    const selectRow = createProjectSelectMenu(
+      config.projects.map((p) => ({ slug: p.slug, repo: p.repo })),
     )
+
+    await message.reply({
+      content: 'プロジェクトを選択してください:',
+      components: [selectRow],
+    })
     return
   }
 
@@ -115,19 +111,23 @@ export async function handleMessage(message: Message): Promise<void> {
       repo: project.repo,
     })
 
-    enqueue(issue.number, project.repo)
+    const queueItem = enqueue(issue.number, project.repo)
 
-    await message.reply(
-      `Issue #${issue.number} を作成しました!\n${issue.htmlUrl}`,
-    )
-
-    await notifyIssueCreated(
-      issue.number,
-      issue.title,
-      issue.htmlUrl,
-      issue.labels,
-      project.channelId,
-    )
+    if (queueItem) {
+      await message.reply(`Issue #${issue.number} を作成しました!\n${issue.htmlUrl}`)
+      await notifyIssueCreated(
+        issue.number,
+        issue.title,
+        issue.htmlUrl,
+        issue.labels,
+        project.channelId,
+        queueItem.id,
+      )
+    } else {
+      await message.reply(
+        `Issue #${issue.number} を作成しました（既にキューに存在するためスキップ）。\n${issue.htmlUrl}`,
+      )
+    }
 
     // セッション終了
     activeSessions.delete(userId)
