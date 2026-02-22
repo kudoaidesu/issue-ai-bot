@@ -54,9 +54,13 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
 
     log.info(`Executing: claude -p "${options.prompt.slice(0, 60)}..."`)
 
+    // CLAUDECODE 環境変数を除去して子プロセスを起動
+    // （Claude Code内でBot開発中にネストセッションエラーを防止）
+    const { CLAUDECODE: _, ...cleanEnv } = process.env
     const proc = spawn('claude', args, {
       cwd: options.cwd ?? process.cwd(),
       stdio: ['inherit', 'pipe', 'pipe'],
+      env: cleanEnv,
     })
 
     let stdout = ''
