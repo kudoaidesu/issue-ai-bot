@@ -7,7 +7,7 @@ const log = createLogger('scheduler')
 
 const tasks = new Map<string, ScheduledTask>()
 
-export type QueueProcessHandler = (issueNumber: number) => Promise<void>
+export type QueueProcessHandler = (issueNumber: number, repository: string) => Promise<void>
 
 let processHandler: QueueProcessHandler | null = null
 
@@ -30,7 +30,7 @@ async function processQueue(): Promise<void> {
 
     if (processHandler) {
       try {
-        await processHandler(item.issueNumber)
+        await processHandler(item.issueNumber, item.repository)
         updateStatus(item.id, 'completed')
         log.info(`Issue #${item.issueNumber} completed`)
       } catch (err) {

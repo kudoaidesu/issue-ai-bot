@@ -9,19 +9,19 @@ const log = createLogger('main')
 
 async function main(): Promise<void> {
   log.info('Issue AI Bot starting...')
-  log.info(`LLM: Claude Code (${config.llm.mode}) / ${config.llm.model}`)
+  log.info(`LLM: Claude Code / ${config.llm.model}`)
+  log.info(`Projects: ${config.projects.map((p) => p.slug).join(', ') || 'none'}`)
   log.info('GitHub: gh CLI (authenticated session)')
   log.info(`Cron schedule: ${config.cron.schedule}`)
 
-  // キュー処理ハンドラを設定（Phase 2で実装するAI Coderに差し替え可能）
-  setProcessHandler(async (issueNumber: number) => {
+  // キュー処理ハンドラを設定（Phase 4で実装するAI Coderに差し替え可能）
+  setProcessHandler(async (issueNumber: number, repository: string) => {
     await notifyProcessingStart(issueNumber)
 
-    const issue = await getIssue(issueNumber)
-    log.info(`Processing Issue #${issueNumber}: ${issue.title}`)
+    const issue = await getIssue(issueNumber, repository)
+    log.info(`Processing Issue #${issueNumber} (${repository}): ${issue.title}`)
 
-    // TODO: Phase 2 — AI Coder Agentを呼び出してコード生成→PR作成
-    // 現在はログ出力のみ
+    // TODO: Phase 4 — AI Coder Agentを呼び出してコード生成→PR作成
     log.info(`Issue #${issueNumber} — AI Coder Agent is not yet implemented`)
 
     await notifyProcessingComplete(issueNumber, true, 'AI Coderは未実装です。Issue情報をログに記録しました。')
