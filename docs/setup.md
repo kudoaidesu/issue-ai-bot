@@ -11,42 +11,136 @@
 
 ### 1.1 Discord Bot の作成
 
+#### Step 1: Application 作成
+
 1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセス
-2. 「New Application」→ アプリ名を入力
-3. 「Bot」タブ → 「Add Bot」
-4. Bot Token をコピー → `.env` に設定
-5. 「Privileged Gateway Intents」で以下を有効化:
-   - MESSAGE CONTENT INTENT
-   - SERVER MEMBERS INTENT
-6. 「OAuth2 → URL Generator」で Bot をサーバーに招待:
-   - Scopes: `bot`, `applications.commands`
-   - Permissions: `Send Messages`, `Read Message History`, `Use Slash Commands`
+2. **「New Application」** をクリック → アプリ名を入力 → **「Create」**
 
-### 1.2 GitHub Personal Access Token
+#### Step 2: Bot Token 取得
 
-1. [GitHub Settings → Developer Settings → Personal Access Tokens](https://github.com/settings/tokens)
-2. 「Fine-grained tokens」で新規作成
-3. 必要な権限:
-   - **Issues**: Read and write
-   - **Pull requests**: Read and write
-   - **Contents**: Read and write
-4. トークンをコピー → `.env` に設定
+1. 左メニューの **「Bot」** タブを開く
+2. **「Reset Token」** をクリックしてトークンを生成
+3. トークンをコピーして `.env` の `DISCORD_BOT_TOKEN` に設定
+
+> トークンは一度しか表示されない。紛失したら再度 Reset Token が必要。
+
+#### Step 3: OAuth2 Code Grant を無効化
+
+1. 左メニューの **「OAuth2」** タブを開く
+2. **「Require OAuth2 Code Grant」** が **OFF** であることを確認
+   - ON だと招待時に「Integration requires code grant」エラーになる
+
+#### Step 4: Privileged Gateway Intents 設定
+
+1. 左メニューの **「Bot」** タブに戻る
+2. 下部の **「Privileged Gateway Intents」** セクションで以下を設定:
+
+| Intent | 設定 | 理由 |
+|--------|------|------|
+| **Message Content Intent** | **ON** | DMメッセージの内容を読むために必須 |
+| Server Members Intent | OFF | 未使用 |
+| Presence Intent | OFF | 未使用 |
+
+3. **Save Changes**
+
+#### Step 5: Installation 設定（招待URL生成）
+
+1. 左メニューの **「Installation」** タブを開く
+2. **「Guild Install」** にチェック
+3. **Default Install Settings** の Guild Install で以下を設定:
+
+**Scopes:**
+- `bot`
+- `applications.commands`
+
+**Permissions（8つ）:**
+- View Channels
+- Send Messages
+- Create Public Threads
+- Send Messages in Threads
+- Manage Threads
+- Embed Links
+- Read Message History
+- Use Slash Commands
+
+4. **Save Changes**
+
+> **Note:** 旧方式の「OAuth2 > URL Generator」ではなく「Installation」タブを使用する。
+> URL Generator は Redirect URI が必要で Bot 招待には不向き。
+
+#### Step 6: サーバーに招待
+
+1. **「Installation」** タブ上部の **Install Link** をコピー
+2. ブラウザで開く → **「Add to server」** → 対象サーバーを選択 → **「Authorize」**
+
+または、手動でURLを構築して招待:
+```
+https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot+applications.commands&permissions=326417526784
+```
+- `YOUR_APP_ID`: General Information ページの Application ID
+
+#### Step 7: Guild ID / Channel ID の取得
+
+1. Discordアプリの **設定 > 詳細設定 > 開発者モード** を **ON**
+2. サーバー名を右クリック → **「サーバーIDをコピー」** → `guildId`
+3. 通知先チャンネルを右クリック → **「チャンネルIDをコピー」** → `channelId`
+4. `projects.json` に記入:
+
+```json
+[
+  {
+    "slug": "your-project",
+    "guildId": "コピーしたサーバーID",
+    "channelId": "コピーしたチャンネルID",
+    "repo": "owner/repo-name",
+    "localPath": "/path/to/local/repo"
+  }
+]
+```
+
+### 1.2 GitHub CLI
+
+**GitHub Token は不要。** `gh` CLI の認証セッションを使用する（CLI-First 方針）。
+
+```bash
+# GitHub CLI のインストール
+brew install gh
+
+# ブラウザ認証でログイン
+gh auth login
+
+# 認証確認
+gh auth status
+```
 
 ### 1.3 Claude Code CLI
 
-本プロジェクトはClaude Code CLI (`claude -p`) をサブスク枠で使用する（API Key不要）。
+Claude Code CLI をサブスク枠で使用する（API Key 不要）。
 
-1. Claude Code CLIがインストール済みであること
-2. `claude` コマンドが実行可能であること
-3. 確認: `claude --version`
+```bash
+# インストール
+npm install -g @anthropic-ai/claude-code
 
-> **注**: 対話式セットアップウィザード (`npx tsx src/cli/setup.ts`) でも設定可能。
+# 認証セットアップ
+claude setup-token
+
+# 確認
+claude --version
+```
+
+### 1.4 Docker（AI Coder サンドボックス用）
+
+```bash
+brew install --cask docker
+```
+
+Docker Desktop を起動して、`docker ps` が動作することを確認。
 
 ## 2. プロジェクトセットアップ
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/<your-org>/issue-ai-bot.git
+git clone https://github.com/kudoaidesu/issue-ai-bot.git
 cd issue-ai-bot
 
 # 依存パッケージをインストール
@@ -58,30 +152,34 @@ cp .env.example .env
 
 ## 3. 環境変数の設定
 
-`.env` ファイルを編集:
+`.env` ファイルを編集（**Discord Bot Token のみ**が必須のシークレット）:
 
 ```env
-# Discord
+# Discord（唯一の必須シークレット）
 DISCORD_BOT_TOKEN=your_discord_bot_token
-DISCORD_GUILD_ID=your_discord_server_id
-DISCORD_CHANNEL_ID=your_notification_channel_id
 
-# GitHub
-GITHUB_TOKEN=your_github_personal_access_token
-GITHUB_OWNER=your_github_username
-GITHUB_REPO=your_target_repository
+# Claude Code (API Key不要 — claude CLIのサブスク枠を使用)
+LLM_MODEL=sonnet
 
-# LLM
-LLM_MODE=cli                    # cli or sdk
-LLM_MODEL=sonnet                # 使用モデル
-
-# Cron
-CRON_SCHEDULE=0 22 * * *
-CRON_REPORT_SCHEDULE=0 8 * * *
+# Cron (cron expression, Asia/Tokyo)
+CRON_SCHEDULE=0 1 * * *
+CRON_REPORT_SCHEDULE=0 9 * * *
 
 # Queue
 QUEUE_DATA_DIR=./data
+QUEUE_MAX_BATCH_SIZE=5
+QUEUE_COOLDOWN_MS=60000
+QUEUE_DAILY_BUDGET_USD=20
+QUEUE_MAX_RETRIES=2
+QUEUE_RETRY_BASE_MS=300000
+
+# AI Coder Agent
+CODER_MAX_BUDGET_USD=5
+CODER_MAX_RETRIES=3
+CODER_TIMEOUT_MS=1800000
 ```
+
+> **GitHub Token / API Key は `.env` に書かない。** CLI-First 方針を参照。
 
 ## 4. 開発
 
@@ -94,6 +192,9 @@ npm run build
 
 # テスト
 npm run test
+
+# 対話式セットアップ
+npm run setup
 ```
 
 ## 5. サーバー常時起動設定（macOS）
@@ -162,7 +263,10 @@ tailscale ip
 
 | 症状 | 対処 |
 |------|------|
-| Discord Bot がオフライン | `launchctl list | grep issue-ai-bot` でサービス確認 |
-| GitHub API エラー | トークンの権限とレート制限を確認 |
-| Claude CLI エラー | `claude --version` でCLI存在確認、`LLM_MODE` 設定を確認 |
-| Cronが動かない | `npm run start` でプロセスが起動しているか確認 |
+| 「Integration requires code grant」エラー | Developer Portal > OAuth2 > 「Require OAuth2 Code Grant」を OFF にする |
+| Bot がサーバーに表示されない | コード（`npm run dev`）が起動しているか確認。Bot は起動していないとオフライン |
+| スラッシュコマンドが出ない | `projects.json` の `guildId` が正しいか確認 |
+| Discord Bot がオフライン | `launchctl list \| grep issue-ai-bot` でサービス確認 |
+| GitHub API エラー | `gh auth status` で認証状態を確認 |
+| Claude CLI エラー | `claude --version` でCLI存在確認 |
+| Cron が動かない | `npm run start` でプロセスが起動しているか確認 |

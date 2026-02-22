@@ -1,0 +1,51 @@
+import { type Message } from 'discord.js'
+import { findProjectByGuildId } from '../../config.js'
+import { runClaudeCli } from '../../llm/claude-cli.js'
+import { createLogger } from '../../utils/logger.js'
+import { sanitizePromptInput, validateDiscordInput } from '../../utils/sanitize.js'
+
+const log = createLogger('guild-chat')
+
+const SYSTEM_PROMPT = 'あなたはDiscordサーバーのアシスタントBotです。ユーザーの質問や雑談に日本語で簡潔に回答してください。2000文字以内で返してください。技術的な質問にはコード例を含めても構いません。'
+
+export async function handleGuildChat(message: Message): Promise<void> {
+  if (!message.guild) return
+  if (message.author.bot) return
+
+  const content = message.content
+    .replace(/<@!?\d+>/g, '')
+    .trim()
+
+  if (!content) return
+
+  const project = findProjectByGuildId(message.guild.id)
+  if (!project) {
+    log.warn(`Unknown guild: ${message.guild.id}`)
+    return
+  }
+
+  const validation = validateDiscordInput(content)
+  if (!validation.valid) return
+  const sanitized = sanitizePromptInput(validation.sanitized)
+
+  log.info(`Guild chat from ${message.author.tag}: "${sanitized.slice(0, 50)}..."`)
+
+  try {
+    if ('sendTyping' in message.channel) {
+      await message.channel.sendTyping()
+    }
+
+    const result = await runClaudeCli({
+      prompt: sanitized,
+      systemPrompt: SYSTEM_PROMPT,
+      model: 'haiku',
+      timeoutMs: 180_000,
+    })
+
+    const reply = result.content.slice(0, 2000)
+    await message.reply(reply)
+  } catch (err) {
+    log.error('Guild chat failed', err)
+    await message.reply('すみません、応答の生成に失敗しました。')
+  }
+}

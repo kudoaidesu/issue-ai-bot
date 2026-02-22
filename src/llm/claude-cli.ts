@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createLogger } from '../utils/logger.js'
 
 const log = createLogger('claude-cli')
@@ -37,7 +37,7 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
     ]
 
     if (options.systemPrompt) {
-      args.push('--system-prompt', options.systemPrompt)
+      args.push('--append-system-prompt', options.systemPrompt)
     }
     if (options.model) {
       args.push('--model', options.model)
@@ -54,42 +54,51 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
 
     log.info(`Executing: claude -p "${options.prompt.slice(0, 60)}..."`)
 
-    execFile(
-      'claude',
-      args,
-      {
-        cwd: options.cwd ?? process.cwd(),
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-        timeout: options.timeoutMs ?? 5 * 60 * 1000,
-      },
-      (error, stdout, stderr) => {
-        if (stderr) {
-          log.warn(`stderr: ${stderr.slice(0, 200)}`)
-        }
+    const proc = spawn('claude', args, {
+      cwd: options.cwd ?? process.cwd(),
+      stdio: ['inherit', 'pipe', 'pipe'],
+    })
 
-        if (error) {
-          log.error('Claude CLI failed', error)
-          reject(new Error(`Claude CLI failed: ${error.message}`))
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
+    proc.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
+
+    const timeout = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(`Claude CLI timed out after ${options.timeoutMs ?? 300_000}ms`))
+    }, options.timeoutMs ?? 5 * 60 * 1000)
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout)
+
+      if (stderr) {
+        log.warn(`stderr: ${stderr.slice(0, 200)}`)
+      }
+
+      if (code !== 0) {
+        log.error(`Claude CLI exited with code ${code}`)
+        reject(new Error(`Claude CLI exited with code ${code}: ${stderr.slice(0, 500)}`))
+        return
+      }
+
+      try {
+        const parsed = JSON.parse(stdout) as ClaudeJsonOutput
+
+        if (parsed.is_error) {
+          reject(new Error(`Claude CLI error: ${parsed.result}`))
           return
         }
 
-        try {
-          const parsed = JSON.parse(stdout) as ClaudeJsonOutput
-
-          if (parsed.is_error) {
-            reject(new Error(`Claude CLI error: ${parsed.result}`))
-            return
-          }
-
-          resolve({
-            content: parsed.result,
-            costUsd: parsed.cost_usd,
-          })
-        } catch {
-          // JSON解析失敗時はテキスト出力として扱う
-          resolve({ content: stdout.trim() })
-        }
-      },
-    )
+        resolve({
+          content: parsed.result,
+          costUsd: parsed.cost_usd,
+        })
+      } catch {
+        // JSON解析失敗時はテキスト出力として扱う
+        resolve({ content: stdout.trim() })
+      }
+    })
   })
 }
