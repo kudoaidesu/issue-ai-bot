@@ -6,7 +6,8 @@ import { findProjectByGuildId } from '../../config.js'
 import { refineIssue } from '../../agents/issue-refiner/index.js'
 import { createIssue } from '../../github/issues.js'
 import { enqueue } from '../../queue/processor.js'
-import { notifyIssueCreated } from '../notifier.js'
+import { processImmediate } from '../../queue/scheduler.js'
+import { notifyIssueCreated, notifyImmediateStart } from '../notifier.js'
 import { validateDiscordInput, sanitizePromptInput } from '../../utils/sanitize.js'
 
 export const data = new SlashCommandBuilder()
@@ -65,23 +66,76 @@ export async function execute(
     repo: project.repo,
   })
 
-  const queueItem = enqueue(issue.number, project.repo)
+  if (result.urgency === 'immediate') {
+    const immediateResult = await processImmediate(issue.number, project.repo)
 
-  if (queueItem) {
-    await interaction.editReply(
-      `Issue #${issue.number} を作成しました: ${issue.htmlUrl}`,
-    )
-    await notifyIssueCreated(
-      issue.number,
-      issue.title,
-      issue.htmlUrl,
-      issue.labels,
-      project.channelId,
-      queueItem.id,
-    )
+    switch (immediateResult.status) {
+      case 'started':
+        await interaction.editReply(
+          `Issue #${issue.number} を作成し、即時処理を開始しました: ${issue.htmlUrl}`,
+        )
+        await notifyImmediateStart(
+          issue.number, issue.title, issue.htmlUrl, issue.labels, project.channelId,
+        )
+        break
+
+      case 'locked': {
+        const queueItem = enqueue(issue.number, project.repo, 'high')
+        await interaction.editReply(
+          `Issue #${issue.number} を作成しました（処理中タスクあり、高優先度でキューに追加）: ${issue.htmlUrl}`,
+        )
+        if (queueItem) {
+          await notifyIssueCreated(
+            issue.number, issue.title, issue.htmlUrl, issue.labels,
+            project.channelId, queueItem.id,
+          )
+        }
+        break
+      }
+
+      case 'budget_exceeded': {
+        const queueItem = enqueue(issue.number, project.repo, 'high')
+        await interaction.editReply(
+          `Issue #${issue.number} を作成しました（予算超過、キューに追加）: ${issue.htmlUrl}`,
+        )
+        if (queueItem) {
+          await notifyIssueCreated(
+            issue.number, issue.title, issue.htmlUrl, issue.labels,
+            project.channelId, queueItem.id,
+          )
+        }
+        break
+      }
+
+      case 'no_handler': {
+        const queueItem = enqueue(issue.number, project.repo, 'high')
+        await interaction.editReply(
+          `Issue #${issue.number} を作成し、キューに追加しました: ${issue.htmlUrl}`,
+        )
+        if (queueItem) {
+          await notifyIssueCreated(
+            issue.number, issue.title, issue.htmlUrl, issue.labels,
+            project.channelId, queueItem.id,
+          )
+        }
+        break
+      }
+    }
   } else {
-    await interaction.editReply(
-      `Issue #${issue.number} を作成しました（既にキューに存在）: ${issue.htmlUrl}`,
-    )
+    const queueItem = enqueue(issue.number, project.repo)
+
+    if (queueItem) {
+      await interaction.editReply(
+        `Issue #${issue.number} を作成しました: ${issue.htmlUrl}`,
+      )
+      await notifyIssueCreated(
+        issue.number, issue.title, issue.htmlUrl, issue.labels,
+        project.channelId, queueItem.id,
+      )
+    } else {
+      await interaction.editReply(
+        `Issue #${issue.number} を作成しました（既にキューに存在）: ${issue.htmlUrl}`,
+      )
+    }
   }
 }
