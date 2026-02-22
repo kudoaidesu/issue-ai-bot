@@ -2,6 +2,7 @@ import { config } from './config.js'
 import { createLogger } from './utils/logger.js'
 import { startBot } from './bot/index.js'
 import { startScheduler, stopScheduler, setProcessHandler } from './queue/scheduler.js'
+import { initializeMemory, shutdownMemory } from './memory/index.js'
 import {
   notifyProcessingStart,
   notifyProcessingComplete,
@@ -74,6 +75,10 @@ async function main(): Promise<void> {
     }
   })
 
+  // メモリシステム初期化
+  await initializeMemory()
+  log.info('Memory system initialized')
+
   // Discord Bot起動
   const client = await startBot()
   log.info('Discord Bot started')
@@ -86,6 +91,7 @@ async function main(): Promise<void> {
   const shutdown = async (): Promise<void> => {
     log.info('Shutting down...')
     stopScheduler()
+    shutdownMemory()
     client.destroy()
     log.info('Goodbye')
     process.exit(0)

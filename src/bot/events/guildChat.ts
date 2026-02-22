@@ -4,6 +4,7 @@ import { runClaudeCli } from '../../llm/claude-cli.js'
 import { createLogger } from '../../utils/logger.js'
 import { sanitizePromptInput, validateDiscordInput } from '../../utils/sanitize.js'
 import { resolveChatModel, parseModelPrefix } from '../chat-model.js'
+import { getMemoryContext, saveConversation } from '../../memory/index.js'
 
 const log = createLogger('guild-chat')
 
@@ -36,6 +37,8 @@ export async function handleGuildChat(message: Message): Promise<void> {
   const sanitized = sanitizePromptInput(validation.sanitized)
 
   const model = resolveChatModel(message.guild.id, messageModelOverride)
+  const guildId = message.guild.id
+  const channelId = message.channel.id
 
   log.info(`Guild chat from ${message.author.tag} (model=${model}): "${sanitized.slice(0, 50)}..."`)
 
@@ -44,15 +47,28 @@ export async function handleGuildChat(message: Message): Promise<void> {
       await message.channel.sendTyping()
     }
 
+    // メモリコンテキストを構築してシステムプロンプトに注入
+    const memoryContext = await getMemoryContext(guildId, channelId, sanitized)
+    const enrichedSystemPrompt = memoryContext
+      ? `${SYSTEM_PROMPT}\n\n${memoryContext}`
+      : SYSTEM_PROMPT
+
     const result = await runClaudeCli({
       prompt: sanitized,
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: enrichedSystemPrompt,
       model,
       timeoutMs: 180_000,
     })
 
     const reply = result.content.slice(0, 2000)
     await message.reply(reply)
+
+    // 会話をメモリに保存
+    const now = new Date().toISOString()
+    await saveConversation(guildId, channelId, [
+      { role: 'user', userId: message.author.id, username: message.author.tag, content: sanitized, timestamp: now },
+      { role: 'assistant', content: result.content, timestamp: now },
+    ])
   } catch (err) {
     log.error('Guild chat failed', err)
     await message.reply('すみません、応答の生成に失敗しました。')

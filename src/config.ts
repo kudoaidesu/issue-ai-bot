@@ -108,6 +108,29 @@ export const config = {
     maxRetries: Number(optional('CODER_MAX_RETRIES', '3')),
     timeoutMs: Number(optional('CODER_TIMEOUT_MS', String(30 * 60 * 1000))),
   },
+  memory: {
+    enabled: optional('MEMORY_ENABLED', 'true') === 'true',
+    dataDir: optional('MEMORY_DATA_DIR', './data'),
+    search: {
+      vectorWeight: 0.7,
+      textWeight: 0.3,
+      maxResults: 6,
+      minScore: 0.35,
+    },
+    chunking: {
+      tokens: 400,
+      overlap: 80,
+    },
+    temporalDecay: {
+      enabled: true,
+      halfLifeDays: 30,
+    },
+    compaction: {
+      threshold: 100,
+      model: 'haiku',
+    },
+    contextBudgetTokens: 2000,
+  },
   usageMonitor: {
     scrapeSchedule: optional('USAGE_SCRAPE_SCHEDULE', '*/20 * * * *'),
     reportSchedule: optional('USAGE_REPORT_SCHEDULE', '0 9 * * *'),

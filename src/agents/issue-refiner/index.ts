@@ -1,6 +1,11 @@
 import { config } from '../../config.js'
 import { runClaudeCli } from '../../llm/claude-cli.js'
 import { createLogger } from '../../utils/logger.js'
+import {
+  appendSessionMessage,
+  getSessionConversation,
+  deleteSession,
+} from '../../memory/index.js'
 
 const log = createLogger('issue-refiner')
 
@@ -62,24 +67,28 @@ export type RefinerResult =
   | { status: 'needs_info'; questions: string[] }
   | { status: 'ready'; title: string; body: string; labels: string[]; urgency: Urgency }
 
-interface ConversationMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-const conversations = new Map<string, ConversationMessage[]>()
+// フォールバック用のインメモリキャッシュ（メモリシステム無効時）
+const conversationsFallback = new Map<string, Array<{ role: 'user' | 'assistant'; content: string }>>()
 
 export async function refineIssue(
   sessionId: string,
   userMessage: string,
 ): Promise<RefinerResult> {
-  let history = conversations.get(sessionId)
-  if (!history) {
-    history = []
-    conversations.set(sessionId, history)
+  // セッション会話をディスクから読み込み
+  let history = config.memory.enabled
+    ? getSessionConversation(sessionId)
+    : (conversationsFallback.get(sessionId) ?? [])
+
+  if (!config.memory.enabled && !conversationsFallback.has(sessionId)) {
+    conversationsFallback.set(sessionId, history)
   }
 
-  history.push({ role: 'user', content: userMessage })
+  const userMsg = { role: 'user' as const, content: userMessage, timestamp: new Date().toISOString() }
+  history.push(userMsg)
+
+  if (config.memory.enabled) {
+    appendSessionMessage(sessionId, userMsg)
+  }
 
   log.info(`Session ${sessionId}: processing "${userMessage.slice(0, 50)}..."`)
 
@@ -95,12 +104,21 @@ export async function refineIssue(
     allowedTools: [],
   })
 
-  history.push({ role: 'assistant', content: response.content })
+  const assistantMsg = { role: 'assistant' as const, content: response.content, timestamp: new Date().toISOString() }
+  history.push(assistantMsg)
+
+  if (config.memory.enabled) {
+    appendSessionMessage(sessionId, assistantMsg)
+  }
 
   const result = parseResponse(response.content)
 
   if (result.status === 'ready') {
-    conversations.delete(sessionId)
+    if (config.memory.enabled) {
+      deleteSession(sessionId)
+    } else {
+      conversationsFallback.delete(sessionId)
+    }
     log.info(`Session ${sessionId}: Issue ready — "${result.title}"`)
   } else {
     log.info(
@@ -112,7 +130,11 @@ export async function refineIssue(
 }
 
 export function clearSession(sessionId: string): void {
-  conversations.delete(sessionId)
+  if (config.memory.enabled) {
+    deleteSession(sessionId)
+  } else {
+    conversationsFallback.delete(sessionId)
+  }
 }
 
 function parseResponse(text: string): RefinerResult {
