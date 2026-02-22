@@ -2,8 +2,8 @@ import {
   type ChatInputCommandInteraction,
   SlashCommandBuilder,
 } from 'discord.js'
-import { getLatestUsage, scrapeUsage } from '../../utils/usage-monitor.js'
-import type { UsageSnapshot, UsageReport } from '../../utils/usage-monitor.js'
+import { getLatestUsage, scrapeUsage, evaluateAlerts } from '../../utils/usage-monitor.js'
+import type { UsageReport, UsageSnapshot } from '../../utils/usage-monitor.js'
 import { COLORS, createEmbed } from '../theme.js'
 
 export const data = new SlashCommandBuilder()
@@ -16,20 +16,53 @@ export const data = new SlashCommandBuilder()
       .setRequired(false),
   )
 
-function formatSnapshot(snapshot: UsageSnapshot | null): string {
+function formatClaudeSnapshot(snapshot: UsageSnapshot | null): string {
   if (!snapshot) return 'データなし（まだ取得されていません）'
   if (snapshot.error) return `**エラー**: ${snapshot.error.slice(0, 200)}`
-  if (!snapshot.parsed) return snapshot.raw.slice(0, 300) || 'パース失敗'
+
+  const claude = snapshot.claude
+  if (!claude) return snapshot.raw.slice(0, 300) || 'パース失敗'
 
   const parts: string[] = []
-  if (snapshot.parsed.usagePercent !== undefined) {
-    parts.push(`使用率: **${snapshot.parsed.usagePercent}%**`)
+
+  if (claude.session) {
+    const s = claude.session
+    const status = s.rateLimited ? '**制限中**' : `${s.usagePercent}%`
+    parts.push(`セッション: ${status}${s.remaining ? ` (残り ${s.remaining})` : ''}`)
   }
-  if (snapshot.parsed.resetAt) {
-    parts.push(`リセット: ${snapshot.parsed.resetAt}`)
+
+  if (claude.weekly) {
+    for (const m of claude.weekly.models) {
+      const pct = m.usagePercent !== undefined ? `${m.usagePercent}%` : '?%'
+      parts.push(`${m.model}: ${pct}${m.usageText ? ` [${m.usageText}]` : ''}`)
+    }
+    if (claude.weekly.resetAt) {
+      parts.push(`リセット: ${claude.weekly.resetAt}`)
+    }
   }
-  parts.push(snapshot.parsed.summary)
-  return parts.join('\n').slice(0, 1024)
+
+  return parts.length > 0 ? parts.join('\n').slice(0, 1024) : 'パース失敗'
+}
+
+function formatCodexSnapshot(snapshot: UsageSnapshot | null): string {
+  if (!snapshot) return 'データなし（まだ取得されていません）'
+  if (snapshot.error) return `**エラー**: ${snapshot.error.slice(0, 200)}`
+
+  const codex = snapshot.codex
+  if (!codex) return snapshot.raw.slice(0, 300) || 'パース失敗'
+
+  const parts: string[] = []
+  if (codex.usagePercent !== undefined) {
+    parts.push(`使用率: **${codex.usagePercent}%**`)
+  }
+  if (codex.usageText) {
+    parts.push(`タスク: ${codex.usageText}`)
+  }
+  if (codex.resetAt) {
+    parts.push(`リセット: ${codex.resetAt}`)
+  }
+
+  return parts.length > 0 ? parts.join('\n').slice(0, 1024) : 'パース失敗'
 }
 
 function buildUsageEmbed(report: UsageReport) {
@@ -37,21 +70,35 @@ function buildUsageEmbed(report: UsageReport) {
 
   fields.push({
     name: 'Claude (Max)',
-    value: formatSnapshot(report.claude),
+    value: formatClaudeSnapshot(report.claude),
     inline: false,
   })
 
   fields.push({
     name: 'OpenAI Codex',
-    value: formatSnapshot(report.codex),
+    value: formatCodexSnapshot(report.codex),
     inline: false,
   })
 
+  // Alert summary
+  const alerts = evaluateAlerts(report)
+  if (alerts.hasAlerts) {
+    const alertLines: string[] = []
+    if (alerts.sessionRateLimited) alertLines.push(`⚠️ ${alerts.sessionDetail}`)
+    if (alerts.wakeTimeConflict) alertLines.push(`⏰ ${alerts.wakeTimeDetail}`)
+    if (alerts.weeklyPaceExceeded) alertLines.push(`📈 ${alerts.weeklyPaceDetail}`)
+    if (alerts.sonnetPaceExceeded) alertLines.push(`📈 ${alerts.sonnetPaceDetail}`)
+    if (alerts.codexPaceExceeded) alertLines.push(`📈 ${alerts.codexPaceDetail}`)
+
+    fields.push({
+      name: 'アラート',
+      value: alertLines.join('\n').slice(0, 1024),
+      inline: false,
+    })
+  }
+
   const hasErrors = report.claude?.error ?? report.codex?.error
-  const highUsage =
-    (report.claude?.parsed?.usagePercent ?? 0) >= 80 ||
-    (report.codex?.parsed?.usagePercent ?? 0) >= 80
-  const color = hasErrors ? COLORS.error : highUsage ? COLORS.warning : COLORS.info
+  const color = hasErrors ? COLORS.error : alerts.hasAlerts ? COLORS.warning : COLORS.info
 
   return createEmbed(color, 'LLM 使用量', {
     fields,

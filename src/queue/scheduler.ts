@@ -5,7 +5,7 @@ import { dequeue, getStats, updateStatus, markForRetry } from './processor.js'
 import { acquireLock, releaseLock, isDailyBudgetExceeded } from './rate-limiter.js'
 import { getDailyCost, getCostReport } from '../utils/cost-tracker.js'
 import { notifyCostReport, notifyCostAlert, notifyUsageReport, notifyUsageAlert } from '../bot/notifier.js'
-import { scrapeUsage } from '../utils/usage-monitor.js'
+import { scrapeUsage, evaluateAlerts } from '../utils/usage-monitor.js'
 import type { UsageReport } from '../utils/usage-monitor.js'
 
 const log = createLogger('scheduler')
@@ -122,17 +122,16 @@ async function scrapeAndAlert(): Promise<void> {
   log.info('Usage scrape triggered')
   try {
     const report = await scrapeUsage()
-    const threshold = config.usageMonitor.alertThreshold
+    const alerts = evaluateAlerts(report)
 
-    const claudePercent = report.claude?.parsed?.usagePercent ?? 0
-    const codexPercent = report.codex?.parsed?.usagePercent ?? 0
-
-    if (claudePercent >= threshold || codexPercent >= threshold) {
+    if (alerts.hasAlerts) {
       for (const project of config.projects) {
-        await notifyUsageAlert(report, threshold, project.channelId)
+        await notifyUsageAlert(alerts, report, project.channelId)
       }
     } else {
-      log.info(`Usage within limits: Claude=${claudePercent}%, Codex=${codexPercent}%`)
+      const claudeSession = report.claude?.claude?.session?.usagePercent ?? '?'
+      const codexPct = report.codex?.codex?.usagePercent ?? '?'
+      log.info(`Usage within limits: Claude session=${claudeSession}%, Codex=${codexPct}%`)
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
