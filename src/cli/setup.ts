@@ -79,19 +79,12 @@ async function setupLlm(): Promise<Record<string, string>> {
   print('── Claude Code 設定 ──')
   print('  LLMはClaude Codeのサブスク枠を使用します。')
   print('  API Key不要 — claude CLIがインストール済みであればOK。')
+  print('  用途に応じてCLI / SDKを直接呼び分けます。')
   print('')
-  print('  モード:')
-  print('    1. cli  — claude -p でプロンプト実行（推奨・シンプル）')
-  print('    2. sdk  — @anthropic-ai/claude-code SDK（プログラマティック）')
-  print('')
-
-  const modeChoice = await ask('モードを選択 (1 or 2)', '1')
-  const mode = modeChoice === '2' ? 'sdk' : 'cli'
 
   const model = await ask('使用モデル', 'sonnet')
 
   return {
-    LLM_MODE: mode,
     LLM_MODEL: model,
   }
 }
@@ -100,16 +93,13 @@ async function setupDiscord(): Promise<Record<string, string>> {
   print('')
   print('── Discord Bot 設定 ──')
   print('  Discord Developer Portal: https://discord.com/developers/applications')
+  print('  Guild ID / Channel ID は projects.json で管理します。')
   print('')
 
   const botToken = await askSecret('Bot Token')
-  const guildId = await ask('Server (Guild) ID')
-  const channelId = await ask('通知用 Channel ID')
 
   return {
     DISCORD_BOT_TOKEN: botToken,
-    DISCORD_GUILD_ID: guildId,
-    DISCORD_CHANNEL_ID: channelId,
   }
 }
 
@@ -149,8 +139,8 @@ function loadExistingEnv(): Record<string, string> {
 
 function writeEnv(env: Record<string, string>): void {
   const sections: { header: string; keys: string[] }[] = [
-    { header: '# Discord', keys: ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID', 'DISCORD_CHANNEL_ID'] },
-    { header: '# Claude Code', keys: ['LLM_MODE', 'LLM_MODEL'] },
+    { header: '# Discord', keys: ['DISCORD_BOT_TOKEN'] },
+    { header: '# Claude Code', keys: ['LLM_MODEL'] },
     { header: '# Cron', keys: ['CRON_SCHEDULE', 'CRON_REPORT_SCHEDULE'] },
     { header: '# Queue', keys: ['QUEUE_DATA_DIR'] },
   ]

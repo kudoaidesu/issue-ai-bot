@@ -1,9 +1,9 @@
 import {
   type ChatInputCommandInteraction,
-  EmbedBuilder,
   SlashCommandBuilder,
 } from 'discord.js'
 import { getScheduledTasks } from '../../queue/scheduler.js'
+import { COLORS, createEmbed } from '../theme.js'
 
 export const data = new SlashCommandBuilder()
   .setName('cron')
@@ -14,19 +14,12 @@ export async function execute(
 ): Promise<void> {
   const tasks = getScheduledTasks()
 
-  const embed = new EmbedBuilder()
-    .setColor(0x1f6feb)
-    .setTitle('Cronジョブ一覧')
-    .setDescription(
-      tasks
-        .map((t) => `**${t.name}** — \`${t.schedule}\``)
-        .join('\n'),
-    )
-    .addFields({
-      name: 'タイムゾーン',
-      value: 'Asia/Tokyo',
-    })
-    .setTimestamp()
+  const embed = createEmbed(COLORS.info, 'Cronジョブ一覧', {
+    description: tasks
+      .map((t) => `**${t.name}** — \`${t.schedule}\``)
+      .join('\n'),
+    fields: [{ name: 'タイムゾーン', value: 'Asia/Tokyo' }],
+  })
 
   await interaction.reply({ embeds: [embed] })
 }

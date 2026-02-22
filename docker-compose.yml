@@ -1,0 +1,33 @@
+services:
+  sandbox:
+    build: .
+    container_name: issue-ai-sandbox
+    # リソース制限
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    # ネットワーク制限（GitHub API のみ許可が理想だが、
+    # Docker のデフォルトブリッジで最低限の分離を提供）
+    networks:
+      - sandbox-net
+    # ワークスペースマウント（読み書き）
+    volumes:
+      - ./workspace:/workspace
+    # タイムアウト: コンテナは10分で自動停止
+    stop_grace_period: 10s
+    # セキュリティ: 権限昇格禁止
+    security_opt:
+      - no-new-privileges:true
+    # 読み取り専用ルートFS（/workspace とtmpは書き込み可）
+    read_only: true
+    tmpfs:
+      - /tmp:size=512M
+
+networks:
+  sandbox-net:
+    driver: bridge

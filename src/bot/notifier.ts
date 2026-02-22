@@ -1,6 +1,7 @@
-import { type Client, EmbedBuilder, type TextChannel } from 'discord.js'
+import { type Client, type TextChannel } from 'discord.js'
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
+import { COLORS, createEmbed } from './theme.js'
 
 const log = createLogger('notifier')
 
@@ -10,10 +11,13 @@ export function initNotifier(discordClient: Client): void {
   client = discordClient
 }
 
-async function getChannel(): Promise<TextChannel | null> {
+async function getChannel(channelId?: string): Promise<TextChannel | null> {
   if (!client) return null
+  // channelId が指定されなかった場合、最初のプロジェクトの channelId をフォールバック
+  const id = channelId ?? config.projects[0]?.channelId
+  if (!id) return null
   try {
-    const channel = await client.channels.fetch(config.discord.channelId)
+    const channel = await client.channels.fetch(id)
     if (channel?.isTextBased()) {
       return channel as TextChannel
     }
@@ -28,19 +32,18 @@ export async function notifyIssueCreated(
   title: string,
   url: string,
   labels: string[],
+  channelId?: string,
 ): Promise<void> {
-  const channel = await getChannel()
+  const channel = await getChannel(channelId)
   if (!channel) return
 
-  const embed = new EmbedBuilder()
-    .setColor(0x238636)
-    .setTitle(`Issue #${issueNumber} を作成しました`)
-    .setURL(url)
-    .addFields(
+  const embed = createEmbed(COLORS.success, `Issue #${issueNumber} を作成しました`, {
+    url,
+    fields: [
       { name: 'タイトル', value: title },
       { name: 'ラベル', value: labels.length > 0 ? labels.join(', ') : 'なし' },
-    )
-    .setTimestamp()
+    ],
+  })
 
   await channel.send({ embeds: [embed] })
   log.info(`Notified: Issue #${issueNumber} created`)
@@ -48,34 +51,31 @@ export async function notifyIssueCreated(
 
 export async function notifyQueueStatus(
   stats: { pending: number; processing: number; completed: number; failed: number },
+  channelId?: string,
 ): Promise<void> {
-  const channel = await getChannel()
+  const channel = await getChannel(channelId)
   if (!channel) return
 
-  const embed = new EmbedBuilder()
-    .setColor(0x1f6feb)
-    .setTitle('キューステータス')
-    .addFields(
+  const embed = createEmbed(COLORS.info, 'キューステータス', {
+    fields: [
       { name: '待機中', value: String(stats.pending), inline: true },
       { name: '処理中', value: String(stats.processing), inline: true },
       { name: '完了', value: String(stats.completed), inline: true },
       { name: '失敗', value: String(stats.failed), inline: true },
-    )
-    .setTimestamp()
+    ],
+  })
 
   await channel.send({ embeds: [embed] })
 }
 
 export async function notifyProcessingStart(
   issueNumber: number,
+  channelId?: string,
 ): Promise<void> {
-  const channel = await getChannel()
+  const channel = await getChannel(channelId)
   if (!channel) return
 
-  const embed = new EmbedBuilder()
-    .setColor(0xd29922)
-    .setTitle(`Issue #${issueNumber} の処理を開始しました`)
-    .setTimestamp()
+  const embed = createEmbed(COLORS.warning, `Issue #${issueNumber} の処理を開始しました`)
 
   await channel.send({ embeds: [embed] })
 }
@@ -84,35 +84,30 @@ export async function notifyProcessingComplete(
   issueNumber: number,
   success: boolean,
   message?: string,
+  channelId?: string,
 ): Promise<void> {
-  const channel = await getChannel()
+  const channel = await getChannel(channelId)
   if (!channel) return
 
-  const embed = new EmbedBuilder()
-    .setColor(success ? 0x238636 : 0xda3633)
-    .setTitle(
-      success
-        ? `Issue #${issueNumber} の処理が完了しました`
-        : `Issue #${issueNumber} の処理に失敗しました`,
-    )
-    .setTimestamp()
+  const color = success ? COLORS.success : COLORS.error
+  const title = success
+    ? `Issue #${issueNumber} の処理が完了しました`
+    : `Issue #${issueNumber} の処理に失敗しました`
 
-  if (message) {
-    embed.setDescription(message)
-  }
+  const embed = createEmbed(color, title, {
+    description: message,
+  })
 
   await channel.send({ embeds: [embed] })
 }
 
-export async function notifyError(errorMessage: string): Promise<void> {
-  const channel = await getChannel()
+export async function notifyError(errorMessage: string, channelId?: string): Promise<void> {
+  const channel = await getChannel(channelId)
   if (!channel) return
 
-  const embed = new EmbedBuilder()
-    .setColor(0xda3633)
-    .setTitle('エラーが発生しました')
-    .setDescription(errorMessage.slice(0, 4000))
-    .setTimestamp()
+  const embed = createEmbed(COLORS.error, 'エラーが発生しました', {
+    description: errorMessage.slice(0, 4000),
+  })
 
   await channel.send({ embeds: [embed] })
 }

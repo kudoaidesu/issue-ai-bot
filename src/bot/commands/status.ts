@@ -1,10 +1,10 @@
 import {
   type ChatInputCommandInteraction,
-  EmbedBuilder,
   SlashCommandBuilder,
 } from 'discord.js'
 import { getStats } from '../../queue/processor.js'
 import { getScheduledTasks } from '../../queue/scheduler.js'
+import { COLORS, createEmbed } from '../theme.js'
 
 export const data = new SlashCommandBuilder()
   .setName('status')
@@ -16,10 +16,8 @@ export async function execute(
   const stats = getStats()
   const cronTasks = getScheduledTasks()
 
-  const embed = new EmbedBuilder()
-    .setColor(0x1f6feb)
-    .setTitle('システムステータス')
-    .addFields(
+  const embed = createEmbed(COLORS.info, 'システムステータス', {
+    fields: [
       {
         name: 'キュー',
         value: [
@@ -38,8 +36,8 @@ export async function execute(
           .join('\n'),
         inline: true,
       },
-    )
-    .setTimestamp()
+    ],
+  })
 
   await interaction.reply({ embeds: [embed] })
 }

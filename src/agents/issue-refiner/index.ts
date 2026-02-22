@@ -1,5 +1,5 @@
 import { config } from '../../config.js'
-import { runLlm } from '../../llm/index.js'
+import { runClaudeCli } from '../../llm/claude-cli.js'
 import { createLogger } from '../../utils/logger.js'
 
 const log = createLogger('issue-refiner')
@@ -83,7 +83,7 @@ export async function refineIssue(
     .map((m) => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.content}`)
     .join('\n\n')
 
-  const response = await runLlm(config.llm.mode, {
+  const response = await runClaudeCli({
     prompt: conversationContext,
     systemPrompt: SYSTEM_PROMPT,
     model: config.llm.model,

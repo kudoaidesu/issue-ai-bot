@@ -42,8 +42,7 @@ export async function runClaudeSdk(options: ClaudeSdkOptions): Promise<ClaudeSdk
     claudeModule = await import(/* webpackIgnore: true */ moduleName) as SdkModule
   } catch {
     throw new Error(
-      'Claude Code SDK not installed. Run: npm install @anthropic-ai/claude-code\n' +
-      'Or use CLI mode instead (LLM_MODE=cli in .env)',
+      'Claude Code SDK not installed. Run: npm install @anthropic-ai/claude-code',
     )
   }
 

@@ -1,25 +1,10 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 
 const log = createLogger('queue')
-
-let cachedRepoSlug: string | undefined
-function getRepoSlug(): string {
-  if (!cachedRepoSlug) {
-    try {
-      const json = execFileSync('gh', ['repo', 'view', '--json', 'nameWithOwner'], { encoding: 'utf-8' })
-      cachedRepoSlug = (JSON.parse(json) as { nameWithOwner: string }).nameWithOwner
-    } catch {
-      cachedRepoSlug = 'unknown/unknown'
-      log.warn('Failed to detect repository via gh CLI')
-    }
-  }
-  return cachedRepoSlug
-}
 
 export type Priority = 'high' | 'medium' | 'low'
 export type QueueStatus = 'pending' | 'processing' | 'completed' | 'failed'
@@ -60,6 +45,7 @@ function saveQueue(items: QueueItem[]): void {
 
 export function enqueue(
   issueNumber: number,
+  repository: string,
   priority: Priority = 'medium',
 ): QueueItem {
   const items = loadQueue()
@@ -67,7 +53,7 @@ export function enqueue(
   const item: QueueItem = {
     id: randomUUID(),
     issueNumber,
-    repository: getRepoSlug(),
+    repository,
     priority,
     status: 'pending',
     createdAt: new Date().toISOString(),

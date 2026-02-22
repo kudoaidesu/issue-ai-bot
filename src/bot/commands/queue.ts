@@ -1,9 +1,9 @@
 import {
   type ChatInputCommandInteraction,
-  EmbedBuilder,
   SlashCommandBuilder,
 } from 'discord.js'
 import { getAll } from '../../queue/processor.js'
+import { COLORS, STATUS_EMOJI, createEmbed } from '../theme.js'
 
 export const data = new SlashCommandBuilder()
   .setName('queue')
@@ -19,27 +19,15 @@ export async function execute(
     return
   }
 
-  const statusEmoji: Record<string, string> = {
-    pending: '⏳',
-    processing: '🔄',
-    completed: '✅',
-    failed: '❌',
-  }
-
   const lines = items.slice(0, 20).map((item) => {
-    const emoji = statusEmoji[item.status] ?? '❓'
+    const emoji = STATUS_EMOJI[item.status] ?? '\u2753'
     return `${emoji} Issue #${item.issueNumber} — ${item.priority} — ${item.status}`
   })
 
-  const embed = new EmbedBuilder()
-    .setColor(0x1f6feb)
-    .setTitle(`キュー一覧 (${items.length}件)`)
-    .setDescription(lines.join('\n'))
-    .setTimestamp()
-
-  if (items.length > 20) {
-    embed.setFooter({ text: `他 ${items.length - 20}件` })
-  }
+  const embed = createEmbed(COLORS.info, `キュー一覧 (${items.length}件)`, {
+    description: lines.join('\n'),
+    footer: items.length > 20 ? `他 ${items.length - 20}件` : undefined,
+  })
 
   await interaction.reply({ embeds: [embed] })
 }

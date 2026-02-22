@@ -52,16 +52,16 @@ export async function startBot(): Promise<Client> {
   client.once(Events.ClientReady, (readyClient) => {
     log.info(`Bot ready: ${readyClient.user.tag}`)
 
-    // スラッシュコマンド登録（application.id取得後）
-    void rest
-      .put(
-        Routes.applicationGuildCommands(
-          readyClient.application.id,
-          config.discord.guildId,
-        ),
-        { body: commandData },
+    // スラッシュコマンド登録（全プロジェクトのguildIdに対して）
+    const appId = readyClient.application.id
+    const registrations = config.projects
+      .filter((p) => p.guildId)
+      .map((p) =>
+        rest
+          .put(Routes.applicationGuildCommands(appId, p.guildId), { body: commandData })
+          .then(() => log.info(`Registered ${commandData.length} commands for guild ${p.slug}`)),
       )
-      .then(() => log.info(`Registered ${commandData.length} slash commands`))
+    void Promise.all(registrations)
 
     initNotifier(client)
   })

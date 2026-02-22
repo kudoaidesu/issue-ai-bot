@@ -1,5 +1,6 @@
 import 'dotenv/config'
-import type { LlmMode } from './llm/index.js'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 function required(key: string): string {
   const value = process.env[key]
@@ -13,14 +14,37 @@ function optional(key: string, defaultValue: string): string {
   return process.env[key] ?? defaultValue
 }
 
+export interface ProjectConfig {
+  slug: string
+  guildId: string
+  channelId: string
+  repo: string
+  localPath: string
+}
+
+function loadProjects(): ProjectConfig[] {
+  const projectsPath = resolve(process.cwd(), 'projects.json')
+  try {
+    const raw = readFileSync(projectsPath, 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      throw new Error('projects.json must be an array')
+    }
+    return parsed as ProjectConfig[]
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return []
+    }
+    throw err
+  }
+}
+
 export const config = {
   discord: {
     botToken: required('DISCORD_BOT_TOKEN'),
-    guildId: required('DISCORD_GUILD_ID'),
-    channelId: required('DISCORD_CHANNEL_ID'),
   },
+  projects: loadProjects(),
   llm: {
-    mode: optional('LLM_MODE', 'cli') as LlmMode,
     model: optional('LLM_MODEL', 'sonnet'),
   },
   cron: {
@@ -31,3 +55,7 @@ export const config = {
     dataDir: optional('QUEUE_DATA_DIR', './data'),
   },
 } as const
+
+export function findProjectByGuildId(guildId: string): ProjectConfig | undefined {
+  return config.projects.find((p) => p.guildId === guildId)
+}
