@@ -1,7 +1,8 @@
-import { type Client, type TextChannel } from 'discord.js'
+import { type Client, type TextChannel, type Message, type ThreadChannel, ChannelType } from 'discord.js'
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 import { COLORS, createEmbed } from './theme.js'
+import type { ProgressData, ProgressStage } from '../agents/coder/types.js'
 
 const log = createLogger('notifier')
 
@@ -110,4 +111,107 @@ export async function notifyError(errorMessage: string, channelId?: string): Pro
   })
 
   await channel.send({ embeds: [embed] })
+}
+
+// --- Thread 管理 + リアルタイム進捗 ---
+
+export interface IssueThreadContext {
+  thread: ThreadChannel
+  statusMessage: Message
+}
+
+const STAGE_CONFIG: Record<ProgressStage, { emoji: string; color: number; label: string }> = {
+  setup:     { emoji: '🔧', color: COLORS.info,    label: 'Git セットアップ中' },
+  coding:    { emoji: '🤖', color: COLORS.warning,  label: 'AI コーディング中' },
+  verifying: { emoji: '🔍', color: COLORS.info,    label: 'コミット確認中' },
+  pushing:   { emoji: '🚀', color: COLORS.info,    label: 'PR 作成中' },
+  retrying:  { emoji: '🔄', color: COLORS.warning,  label: 'リトライ中' },
+  done:      { emoji: '✅', color: COLORS.success,  label: '完了' },
+  failed:    { emoji: '❌', color: COLORS.error,    label: '失敗' },
+}
+
+const MILESTONE_STAGES: Set<ProgressStage> = new Set(['coding', 'retrying', 'done', 'failed'])
+
+function createProgressEmbed(data: ProgressData) {
+  const cfg = STAGE_CONFIG[data.stage]
+  const title = data.attempt && data.maxAttempts
+    ? `${cfg.emoji} ${cfg.label} (${data.attempt}/${data.maxAttempts})`
+    : `${cfg.emoji} ${cfg.label}`
+
+  const fields: Array<{ name: string; value: string; inline?: boolean }> = []
+
+  if (data.prUrl) {
+    fields.push({ name: 'PR', value: data.prUrl })
+  }
+  if (data.costUsd !== undefined) {
+    fields.push({ name: 'コスト', value: `$${data.costUsd.toFixed(2)}`, inline: true })
+  }
+  if (data.durationMs !== undefined) {
+    fields.push({ name: '所要時間', value: `${Math.round(data.durationMs / 1000)}秒`, inline: true })
+  }
+  if (data.error) {
+    fields.push({ name: 'エラー', value: data.error.slice(0, 1024) })
+  }
+
+  return createEmbed(cfg.color, title, {
+    description: data.message,
+    fields: fields.length > 0 ? fields : undefined,
+  })
+}
+
+function createMilestoneText(data: ProgressData): string {
+  const cfg = STAGE_CONFIG[data.stage]
+  const attemptStr = data.attempt && data.maxAttempts
+    ? ` (${data.attempt}/${data.maxAttempts})`
+    : ''
+  return `${cfg.emoji} ${data.message}${attemptStr}`
+}
+
+export async function createIssueThread(
+  issueNumber: number,
+  issueTitle: string,
+  channelId: string,
+): Promise<IssueThreadContext | null> {
+  const channel = await getChannel(channelId)
+  if (!channel) return null
+
+  try {
+    const thread = await channel.threads.create({
+      name: `Issue #${issueNumber}: ${issueTitle.slice(0, 80)}`,
+      type: ChannelType.PublicThread,
+      reason: `AI Coder Agent processing Issue #${issueNumber}`,
+    })
+
+    const embed = createEmbed(COLORS.info, `🤖 Issue #${issueNumber} の処理を開始します`, {
+      description: issueTitle,
+    })
+
+    const statusMessage = await thread.send({ embeds: [embed] })
+
+    log.info(`Created thread for Issue #${issueNumber}: ${thread.id}`)
+
+    return { thread, statusMessage }
+  } catch (err) {
+    log.error('Failed to create issue thread', err)
+    return null
+  }
+}
+
+export async function updateProgress(
+  ctx: IssueThreadContext,
+  data: ProgressData,
+): Promise<void> {
+  try {
+    await ctx.statusMessage.edit({ embeds: [createProgressEmbed(data)] })
+  } catch (err) {
+    log.warn(`Failed to edit status embed: ${(err as Error).message}`)
+  }
+
+  if (MILESTONE_STAGES.has(data.stage)) {
+    try {
+      await ctx.thread.send(createMilestoneText(data))
+    } catch (err) {
+      log.warn(`Failed to send milestone: ${(err as Error).message}`)
+    }
+  }
 }

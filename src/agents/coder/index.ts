@@ -36,6 +36,8 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
   const branchName = generateBranchName(issue.number, issue.title)
   let baseBranch: string
 
+  void input.onProgress?.({ stage: 'setup', message: 'Git セットアップ中...' })
+
   try {
     baseBranch = await getBaseBranch(project.localPath)
     await ensureCleanWorkingTree(project.localPath)
@@ -43,6 +45,7 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
   } catch (err) {
     const error = `Git setup failed: ${(err as Error).message}`
     log.error(error)
+    void input.onProgress?.({ stage: 'failed', message: error, error })
     return { success: false, error, retryCount: 0, durationMs: Date.now() - startTime }
   }
 
@@ -52,6 +55,13 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       log.info(`Attempt ${attempt + 1}/${maxRetries} for Issue #${issue.number}`)
+
+      void input.onProgress?.({
+        stage: 'coding',
+        message: `AI がコード生成中... (試行 ${attempt + 1}/${maxRetries})`,
+        attempt: attempt + 1,
+        maxAttempts: maxRetries,
+      })
 
       const result = await runClaudeCli({
         prompt: buildUserPrompt(issue),
@@ -69,12 +79,16 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
       }
 
       // Claude がコミットを生成したか確認
+      void input.onProgress?.({ stage: 'verifying', message: 'コミットを確認中...' })
+
       const hasCommits = await hasNewCommits(project.localPath, baseBranch)
       if (!hasCommits) {
         throw new Error('Claude produced no code changes')
       }
 
       // Push & PR 作成
+      void input.onProgress?.({ stage: 'pushing', message: 'PR を作成中...' })
+
       await pushBranch(project.localPath, branchName)
       const prUrl = await createDraftPR(project.repo, branchName, baseBranch, issue)
 
@@ -96,6 +110,14 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
 
       log.info(`Coder agent completed for Issue #${issue.number}: ${prUrl}`)
 
+      void input.onProgress?.({
+        stage: 'done',
+        message: `完了: ${prUrl}`,
+        prUrl,
+        costUsd: totalCostUsd,
+        durationMs,
+      })
+
       return {
         success: true,
         prUrl,
@@ -110,6 +132,13 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
 
       if (attempt < maxRetries - 1) {
         // リトライ前にブランチをリセット
+        void input.onProgress?.({
+          stage: 'retrying',
+          message: `リトライ準備中... (${attempt + 2}/${maxRetries})`,
+          attempt: attempt + 2,
+          maxAttempts: maxRetries,
+        })
+
         try {
           await resetToBase(project.localPath, baseBranch)
         } catch (resetErr) {
@@ -125,6 +154,14 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
 
   const durationMs = Date.now() - startTime
   const error = `Failed after ${maxRetries} attempts. Last error: ${lastError}`
+
+  void input.onProgress?.({
+    stage: 'failed',
+    message: `失敗: ${lastError}`,
+    error,
+    costUsd: totalCostUsd,
+    durationMs,
+  })
 
   appendAudit({
     action: 'coder_failed',

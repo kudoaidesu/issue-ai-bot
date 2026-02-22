@@ -99,17 +99,24 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## ブランチ + PR の流れ
 
-```bash
-# 1. マージ先ブランチの確認（必須 — 推測で決めない）
-#    CLAUDE.md / CONTRIBUTING.md のブランチ戦略を確認する。
-#    明記されていればそれに従う。
-#    明記されていなければ AskUserQuestion で選択させる:
-#      question: "どのブランチにマージしますか？"
-#      options: 既存ブランチ一覧から候補を提示
-#              (main, develop, staging 等)
+### マージ先の決定（必須）
 
-# 2. featureブランチ作成（命名規則もプロジェクトに従う）
-git checkout -b feature/<topic> <base-branch>
+CLAUDE.md / CONTRIBUTING.md のブランチ戦略を確認する。
+明記されていればそれに従う。明記されていなければ AskUserQuestion で選択させる。
+
+**このプロジェクトの標準フロー:**
+```
+feature/* → develop（マージ） → main（PR）
+```
+
+### 手順
+
+```bash
+# 1. develop を最新に
+git checkout develop && git pull origin develop
+
+# 2. featureブランチ作成
+git checkout -b feature/<topic> develop
 
 # 3. 論理単位でステージ→コミット（上の分割順序に従う）
 git add <files>
@@ -122,25 +129,23 @@ EOF
 gh auth status
 git push -u origin feature/<topic>
 
-# 5. PR作成（--base でマージ先を明示）
-gh pr create --base <target-branch> --title "<短いタイトル>" --body "$(cat <<'EOF'
-## Summary
-<箇条書きで変更概要>
+# 5. feature → develop: PR作成 → マージ
+gh pr create --base develop --title "<タイトル>" --body "<本文>"
+gh pr merge <number> --merge
 
-### コミット一覧
-| コミット | 内容 |
-|---------|------|
-| `feat: ...` | ... |
-| `feat: ...` | ... |
-
-## Test plan
-- [ ] テスト項目1
-- [ ] テスト項目2
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
+# 6. develop → main: PR作成（レビュー用）
+git checkout develop && git pull origin develop
+gh pr create --base main --head develop --title "<タイトル>" --body "<本文>"
+# ※ main への PR はユーザーが手動マージ or 承認後にマージ
 ```
+
+### ユーザーが「developまではマージで」と言った場合
+
+feature → develop を直接マージし、develop → main の PR のみ作成する。
+
+### ユーザーが「コミットとPR作成」とだけ言った場合
+
+上記の標準フロー（feature → develop マージ → main PR）で進める。
 
 ## PR本文の書き方
 
