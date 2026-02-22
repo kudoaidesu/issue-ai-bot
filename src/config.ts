@@ -53,6 +53,9 @@ export const config = {
   },
   queue: {
     dataDir: optional('QUEUE_DATA_DIR', './data'),
+    maxBatchSize: Number(optional('QUEUE_MAX_BATCH_SIZE', '5')),
+    cooldownMs: Number(optional('QUEUE_COOLDOWN_MS', '60000')),
+    dailyBudgetUsd: Number(optional('QUEUE_DAILY_BUDGET_USD', '20')),
   },
   coder: {
     maxBudgetUsd: Number(optional('CODER_MAX_BUDGET_USD', '5')),
