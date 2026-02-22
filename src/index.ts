@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   log.info(`Cron schedule: ${config.cron.schedule}`)
 
   // キュー処理ハンドラ: AI Coder Agent で Issue を自動実装 → Draft PR 作成
-  setProcessHandler(async (issueNumber: number, repository: string) => {
+  setProcessHandler(async (issueNumber: number, repository: string, _queueItemId: string) => {
     const project = config.projects.find((p) => p.repo === repository)
     if (!project) {
       log.error(`No project config found for repository: ${repository}`)

@@ -1,7 +1,7 @@
 import { type Client, type TextChannel, type Message, type ThreadChannel, ChannelType } from 'discord.js'
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
-import { COLORS, createEmbed } from './theme.js'
+import { COLORS, createEmbed, createQueueButtons, createPrButtons } from './theme.js'
 import type { ProgressData, ProgressStage } from '../agents/coder/types.js'
 import type { CostReport } from '../utils/cost-tracker.js'
 
@@ -35,6 +35,7 @@ export async function notifyIssueCreated(
   url: string,
   labels: string[],
   channelId?: string,
+  queueItemId?: string,
 ): Promise<void> {
   const channel = await getChannel(channelId)
   if (!channel) return
@@ -47,7 +48,12 @@ export async function notifyIssueCreated(
     ],
   })
 
-  await channel.send({ embeds: [embed] })
+  const options: Parameters<typeof channel.send>[0] = { embeds: [embed] }
+  if (queueItemId) {
+    options.components = [createQueueButtons(queueItemId)]
+  }
+
+  await channel.send(options)
   log.info(`Notified: Issue #${issueNumber} created`)
 }
 
@@ -203,7 +209,16 @@ export async function updateProgress(
   data: ProgressData,
 ): Promise<void> {
   try {
-    await ctx.statusMessage.edit({ embeds: [createProgressEmbed(data)] })
+    const editOptions: Parameters<typeof ctx.statusMessage.edit>[0] = {
+      embeds: [createProgressEmbed(data)],
+    }
+
+    // PR 完了時にマージボタンを付与
+    if (data.stage === 'done' && data.prUrl) {
+      editOptions.components = [createPrButtons(data.prUrl)]
+    }
+
+    await ctx.statusMessage.edit(editOptions)
   } catch (err) {
     log.warn(`Failed to edit status embed: ${(err as Error).message}`)
   }

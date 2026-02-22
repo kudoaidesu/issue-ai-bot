@@ -65,17 +65,23 @@ export async function execute(
     repo: project.repo,
   })
 
-  enqueue(issue.number, project.repo)
+  const queueItem = enqueue(issue.number, project.repo)
 
-  await interaction.editReply(
-    `Issue #${issue.number} を作成しました: ${issue.htmlUrl}`,
-  )
-
-  await notifyIssueCreated(
-    issue.number,
-    issue.title,
-    issue.htmlUrl,
-    issue.labels,
-    project.channelId,
-  )
+  if (queueItem) {
+    await interaction.editReply(
+      `Issue #${issue.number} を作成しました: ${issue.htmlUrl}`,
+    )
+    await notifyIssueCreated(
+      issue.number,
+      issue.title,
+      issue.htmlUrl,
+      issue.labels,
+      project.channelId,
+      queueItem.id,
+    )
+  } else {
+    await interaction.editReply(
+      `Issue #${issue.number} を作成しました（既にキューに存在）: ${issue.htmlUrl}`,
+    )
+  }
 }
