@@ -1,5 +1,7 @@
 import type { CodingStrategy } from '../types.js'
 import { ClaudeCliStrategy } from './claude-cli.js'
+import { OrchestratorWorkersStrategy } from './orchestrator-workers.js'
+import { ShogunStrategy } from './shogun.js'
 
 const strategies = new Map<string, CodingStrategy>()
 
@@ -22,3 +24,5 @@ export function getDefaultStrategy(): CodingStrategy {
 
 // 組み込み Strategy を自動登録
 registerStrategy(new ClaudeCliStrategy())
+registerStrategy(new OrchestratorWorkersStrategy())
+registerStrategy(new ShogunStrategy())
