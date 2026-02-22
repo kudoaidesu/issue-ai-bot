@@ -3,6 +3,7 @@ import { findProjectByGuildId } from '../../config.js'
 import { runClaudeCli } from '../../llm/claude-cli.js'
 import { createLogger } from '../../utils/logger.js'
 import { sanitizePromptInput, validateDiscordInput } from '../../utils/sanitize.js'
+import { resolveChatModel, parseModelPrefix } from '../chat-model.js'
 
 const log = createLogger('guild-chat')
 
@@ -12,7 +13,7 @@ export async function handleGuildChat(message: Message): Promise<void> {
   if (!message.guild) return
   if (message.author.bot) return
 
-  const content = message.content
+  let content = message.content
     .replace(/<@!?\d+>/g, '')
     .trim()
 
@@ -24,11 +25,19 @@ export async function handleGuildChat(message: Message): Promise<void> {
     return
   }
 
+  // --model プレフィックスをパース（バリデーション前に処理）
+  const { model: messageModelOverride, content: strippedContent } = parseModelPrefix(content)
+  content = strippedContent
+
+  if (!content) return
+
   const validation = validateDiscordInput(content)
   if (!validation.valid) return
   const sanitized = sanitizePromptInput(validation.sanitized)
 
-  log.info(`Guild chat from ${message.author.tag}: "${sanitized.slice(0, 50)}..."`)
+  const model = resolveChatModel(message.guild.id, messageModelOverride)
+
+  log.info(`Guild chat from ${message.author.tag} (model=${model}): "${sanitized.slice(0, 50)}..."`)
 
   try {
     if ('sendTyping' in message.channel) {
@@ -38,7 +47,7 @@ export async function handleGuildChat(message: Message): Promise<void> {
     const result = await runClaudeCli({
       prompt: sanitized,
       systemPrompt: SYSTEM_PROMPT,
-      model: 'haiku',
+      model,
       timeoutMs: 180_000,
     })
 

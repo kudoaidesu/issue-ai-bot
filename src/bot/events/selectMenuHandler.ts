@@ -1,7 +1,9 @@
 import { type StringSelectMenuInteraction } from 'discord.js'
 import { config } from '../../config.js'
-import { parseCustomId } from '../theme.js'
+import { parseCustomId, COLORS, createEmbed } from '../theme.js'
 import { setUserProject } from './messageCreate.js'
+import { setRuntimeModel, getModelDisplayName } from '../chat-model.js'
+import { MODEL_SELECT_ID } from '../commands/model.js'
 import { createLogger } from '../../utils/logger.js'
 
 const log = createLogger('select-handler')
@@ -9,6 +11,25 @@ const log = createLogger('select-handler')
 export async function handleSelectMenuInteraction(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
+  // モデル選択メニュー
+  if (interaction.customId === MODEL_SELECT_ID) {
+    const guildId = interaction.guildId
+    if (!guildId) {
+      await interaction.reply({ content: 'サーバー内でのみ使用できます。', ephemeral: true })
+      return
+    }
+
+    const selectedModel = interaction.values[0]
+    setRuntimeModel(guildId, selectedModel)
+
+    const embed = createEmbed(COLORS.success, 'モデルを変更しました', {
+      description: `チャットモデルを **${getModelDisplayName(selectedModel)}** に設定しました。\nBot再起動でリセットされます。`,
+    })
+
+    await interaction.reply({ embeds: [embed] })
+    return
+  }
+
   const { action } = parseCustomId(interaction.customId)
 
   if (action !== 'project_select') {
