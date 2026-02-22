@@ -160,7 +160,19 @@ Discord.jsで実装。1つのBotが複数Discordサーバーに参加し、guild
 
 **フロー:**
 ```
-曖昧な入力 → コンテキスト分析 → 不足情報チェック → 逆質問 or Issue生成
+曖昧な入力 → コンテキスト分析 → 不足情報チェック → 逆質問 or Issue生成（urgency判定付き）
+```
+
+**緊急度（urgency）判定:**
+- `immediate`: 調査依頼、確認作業、「すぐ」「調べて」「確認して」等 → キューをスキップして即時処理
+- `queued`: 機能追加、リファクタリング、ドキュメント等 → 通常キューに追加
+
+**即時処理フロー:**
+```
+urgency=immediate → processImmediate()
+  ├── ロック空き + 予算内 → fire-and-forget で AI Coder 起動
+  ├── ロック保持中       → 高優先度でキューにフォールバック
+  └── 予算超過           → 高優先度でキューにフォールバック
 ```
 
 **セッション管理:**
@@ -181,7 +193,10 @@ addComment(issueNumber, comment, repo?)
 
 ### 5. Job Queue + Cron Scheduler (`src/queue/`)
 
-全プロジェクトのIssueを1つの共有キューで管理。
+全プロジェクトのIssueを1つの共有キューで管理。2つの処理パスを持つ:
+
+- **キュー処理**: Cron（デフォルト 01:00 JST）でバッチ処理
+- **即時処理**: Issue Refiner の urgency 判定に基づき、キューをスキップして直接実行
 
 ```typescript
 interface QueueItem {
@@ -193,13 +208,19 @@ interface QueueItem {
   createdAt: string
   completedAt?: string
   error?: string
+  retryCount?: number
+  maxRetries?: number
+  nextRetryAt?: string      // exponential backoff 用
 }
 ```
 
 **処理ハンドラ:**
 ```typescript
-type QueueProcessHandler = (issueNumber: number, repository: string) => Promise<void>
+type QueueProcessHandler = (issueNumber: number, repository: string, queueItemId: string) => Promise<void>
 ```
+
+**即時処理 (`processImmediate`):**
+ロック取得 → 予算チェック → processHandler を fire-and-forget で実行。ロック保持中はキューにフォールバック。
 
 ### 6. AI Coder Agent（別リポジトリ: `ai-coder-agent`）
 

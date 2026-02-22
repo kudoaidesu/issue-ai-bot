@@ -13,6 +13,9 @@ const SYSTEM_PROMPT = `あなたはGitHub Issueを作成するための精緻化
 1. 情報が不足している場合は、具体的な質問を3つ以内で返してください。
 2. 十分な情報が揃ったら、構造化されたIssueを生成してください。
 3. 質問は日本語で、簡潔に。
+4. Issue生成時に、緊急度（urgency）を判定してください:
+   - "immediate": 調査依頼、確認作業、即時性のあるタスク。キーワード例: 「すぐ」「調べて」「確認して」「チェックして」「至急」「今すぐ」「調査」「原因を探って」
+   - "queued": 機能追加、リファクタリング、ドキュメント作成、設計変更など、じっくり取り組むタスク
 
 ## 応答フォーマット
 
@@ -22,7 +25,7 @@ const SYSTEM_PROMPT = `あなたはGitHub Issueを作成するための精緻化
 
 ### Issue生成可能な場合
 以下のJSONのみを返してください:
-{"status":"ready","title":"Issueのタイトル","body":"Issueの本文（Markdown形式）","labels":["label1","label2"]}
+{"status":"ready","title":"Issueのタイトル","body":"Issueの本文（Markdown形式）","labels":["label1","label2"],"urgency":"immediate or queued"}
 
 ## Issue本文のテンプレート
 
@@ -53,9 +56,11 @@ const SYSTEM_PROMPT = `あなたはGitHub Issueを作成するための精緻化
 
 必ずJSONのみを返してください。余分なテキストやマークダウンフェンスは不要です。`
 
+export type Urgency = 'immediate' | 'queued'
+
 export type RefinerResult =
   | { status: 'needs_info'; questions: string[] }
-  | { status: 'ready'; title: string; body: string; labels: string[] }
+  | { status: 'ready'; title: string; body: string; labels: string[]; urgency: Urgency }
 
 interface ConversationMessage {
   role: 'user' | 'assistant'
@@ -145,11 +150,14 @@ function parseResponse(text: string): RefinerResult {
         typeof obj.body === 'string' &&
         Array.isArray(obj.labels)
       ) {
+        const urgency: Urgency =
+          obj.urgency === 'immediate' ? 'immediate' : 'queued'
         return {
           status: 'ready',
           title: obj.title,
           body: obj.body,
           labels: obj.labels as string[],
+          urgency,
         }
       }
     }

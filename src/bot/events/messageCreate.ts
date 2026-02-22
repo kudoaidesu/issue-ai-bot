@@ -3,7 +3,8 @@ import { config, type ProjectConfig } from '../../config.js'
 import { refineIssue } from '../../agents/issue-refiner/index.js'
 import { createIssue } from '../../github/issues.js'
 import { enqueue } from '../../queue/processor.js'
-import { notifyIssueCreated } from '../notifier.js'
+import { processImmediate } from '../../queue/scheduler.js'
+import { notifyIssueCreated, notifyImmediateStart } from '../notifier.js'
 import { createLogger } from '../../utils/logger.js'
 import { validateDiscordInput, sanitizePromptInput } from '../../utils/sanitize.js'
 import { createProjectSelectMenu } from '../theme.js'
@@ -111,22 +112,77 @@ export async function handleMessage(message: Message): Promise<void> {
       repo: project.repo,
     })
 
-    const queueItem = enqueue(issue.number, project.repo)
+    if (result.urgency === 'immediate') {
+      // 即時処理を試行
+      const immediateResult = await processImmediate(issue.number, project.repo)
 
-    if (queueItem) {
-      await message.reply(`Issue #${issue.number} を作成しました!\n${issue.htmlUrl}`)
-      await notifyIssueCreated(
-        issue.number,
-        issue.title,
-        issue.htmlUrl,
-        issue.labels,
-        project.channelId,
-        queueItem.id,
-      )
+      switch (immediateResult.status) {
+        case 'started':
+          await message.reply(
+            `Issue #${issue.number} を作成し、即時処理を開始しました!\n${issue.htmlUrl}`,
+          )
+          await notifyImmediateStart(
+            issue.number, issue.title, issue.htmlUrl, issue.labels, project.channelId,
+          )
+          break
+
+        case 'locked': {
+          const queueItem = enqueue(issue.number, project.repo, 'high')
+          await message.reply(
+            `Issue #${issue.number} を作成しました。現在別のタスクが処理中のため、高優先度でキューに追加しました。\n${issue.htmlUrl}`,
+          )
+          if (queueItem) {
+            await notifyIssueCreated(
+              issue.number, issue.title, issue.htmlUrl, issue.labels,
+              project.channelId, queueItem.id,
+            )
+          }
+          break
+        }
+
+        case 'budget_exceeded': {
+          const queueItem = enqueue(issue.number, project.repo, 'high')
+          await message.reply(
+            `Issue #${issue.number} を作成しました。予算超過のため、キューに追加しました。\n${issue.htmlUrl}`,
+          )
+          if (queueItem) {
+            await notifyIssueCreated(
+              issue.number, issue.title, issue.htmlUrl, issue.labels,
+              project.channelId, queueItem.id,
+            )
+          }
+          break
+        }
+
+        case 'no_handler': {
+          const queueItem = enqueue(issue.number, project.repo, 'high')
+          await message.reply(
+            `Issue #${issue.number} を作成し、キューに追加しました。\n${issue.htmlUrl}`,
+          )
+          if (queueItem) {
+            await notifyIssueCreated(
+              issue.number, issue.title, issue.htmlUrl, issue.labels,
+              project.channelId, queueItem.id,
+            )
+          }
+          break
+        }
+      }
     } else {
-      await message.reply(
-        `Issue #${issue.number} を作成しました（既にキューに存在するためスキップ）。\n${issue.htmlUrl}`,
-      )
+      // 通常のキュー追加パス
+      const queueItem = enqueue(issue.number, project.repo)
+
+      if (queueItem) {
+        await message.reply(`Issue #${issue.number} を作成しました!\n${issue.htmlUrl}`)
+        await notifyIssueCreated(
+          issue.number, issue.title, issue.htmlUrl, issue.labels,
+          project.channelId, queueItem.id,
+        )
+      } else {
+        await message.reply(
+          `Issue #${issue.number} を作成しました（既にキューに存在するためスキップ）。\n${issue.htmlUrl}`,
+        )
+      }
     }
 
     // セッション終了

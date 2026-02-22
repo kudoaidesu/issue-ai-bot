@@ -48,8 +48,8 @@ export const config = {
     model: optional('LLM_MODEL', 'sonnet'),
   },
   cron: {
-    schedule: optional('CRON_SCHEDULE', '0 22 * * *'),
-    reportSchedule: optional('CRON_REPORT_SCHEDULE', '0 8 * * *'),
+    schedule: optional('CRON_SCHEDULE', '0 1 * * *'),
+    reportSchedule: optional('CRON_REPORT_SCHEDULE', '0 9 * * *'),
   },
   queue: {
     dataDir: optional('QUEUE_DATA_DIR', './data'),

@@ -156,3 +156,50 @@ export async function runNow(): Promise<void> {
   log.info('Manual queue processing triggered')
   await processQueue()
 }
+
+// --- 即時処理 ---
+
+export type ImmediateResult =
+  | { status: 'started' }
+  | { status: 'locked'; reason: string }
+  | { status: 'budget_exceeded' }
+  | { status: 'no_handler' }
+
+export async function processImmediate(
+  issueNumber: number,
+  repository: string,
+): Promise<ImmediateResult> {
+  log.info(`Immediate processing requested for Issue #${issueNumber} (${repository})`)
+
+  if (!processHandler) {
+    log.warn('No process handler registered for immediate processing')
+    return { status: 'no_handler' }
+  }
+
+  if (isDailyBudgetExceeded()) {
+    log.warn('Daily budget exceeded. Cannot process immediately.')
+    return { status: 'budget_exceeded' }
+  }
+
+  if (!acquireLock()) {
+    log.warn('Lock held. Cannot process immediately — will fall back to queue.')
+    return { status: 'locked', reason: '別のタスクが処理中です' }
+  }
+
+  // Fire-and-forget: ロック取得後に即座に return し、処理はバックグラウンドで実行
+  const queueItemId = `immediate-${issueNumber}-${Date.now()}`
+
+  void (async () => {
+    try {
+      await processHandler!(issueNumber, repository, queueItemId)
+      log.info(`Immediate processing completed for Issue #${issueNumber}`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      log.error(`Immediate processing failed for Issue #${issueNumber}: ${message}`)
+    } finally {
+      releaseLock()
+    }
+  })()
+
+  return { status: 'started' }
+}

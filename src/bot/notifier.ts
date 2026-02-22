@@ -57,6 +57,29 @@ export async function notifyIssueCreated(
   log.info(`Notified: Issue #${issueNumber} created`)
 }
 
+export async function notifyImmediateStart(
+  issueNumber: number,
+  title: string,
+  url: string,
+  labels: string[],
+  channelId?: string,
+): Promise<void> {
+  const channel = await getChannel(channelId)
+  if (!channel) return
+
+  const embed = createEmbed(COLORS.warning, `Issue #${issueNumber} の即時処理を開始します`, {
+    url,
+    fields: [
+      { name: 'タイトル', value: title },
+      { name: 'ラベル', value: labels.length > 0 ? labels.join(', ') : 'なし' },
+      { name: 'モード', value: '即時処理 (キューをスキップ)' },
+    ],
+  })
+
+  await channel.send({ embeds: [embed] })
+  log.info(`Notified: Issue #${issueNumber} immediate processing started`)
+}
+
 export async function notifyQueueStatus(
   stats: { pending: number; processing: number; completed: number; failed: number },
   channelId?: string,
