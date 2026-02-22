@@ -103,10 +103,11 @@ export const config = {
     maxRetries: Number(optional('QUEUE_MAX_RETRIES', '2')),
     retryBaseMs: Number(optional('QUEUE_RETRY_BASE_MS', '300000')),
   },
-  coder: {
-    maxBudgetUsd: Number(optional('CODER_MAX_BUDGET_USD', '5')),
-    maxRetries: Number(optional('CODER_MAX_RETRIES', '3')),
-    timeoutMs: Number(optional('CODER_TIMEOUT_MS', String(30 * 60 * 1000))),
+  taicho: {
+    maxBudgetUsd: Number(optional('TAICHO_MAX_BUDGET_USD', optional('CODER_MAX_BUDGET_USD', '5'))),
+    maxRetries: Number(optional('TAICHO_MAX_RETRIES', optional('CODER_MAX_RETRIES', '3'))),
+    timeoutMs: Number(optional('TAICHO_TIMEOUT_MS', optional('CODER_TIMEOUT_MS', String(30 * 60 * 1000)))),
+    strategy: optional('TAICHO_STRATEGY', 'claude-cli'),
   },
   memory: {
     enabled: optional('MEMORY_ENABLED', 'true') === 'true',

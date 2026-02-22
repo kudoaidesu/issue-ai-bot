@@ -7,8 +7,8 @@ const log = createLogger('rate-limiter')
 let processing = false
 let processingStartedAt: number | null = null
 
-// ロック取得タイムアウト: coder タイムアウトの2倍
-const STALE_LOCK_MS = config.coder.timeoutMs * 2
+// ロック取得タイムアウト: taicho タイムアウトの2倍
+const STALE_LOCK_MS = config.taicho.timeoutMs * 2
 
 export function acquireLock(): boolean {
   if (processing) {

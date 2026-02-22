@@ -3,7 +3,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js'
 import { findProjectByGuildId } from '../../config.js'
-import { refineIssue } from '../../agents/issue-refiner/index.js'
+import { refineIssue } from '../../agents/torisan/index.js'
 import { createIssue } from '../../github/issues.js'
 import { enqueue } from '../../queue/processor.js'
 import { processImmediate } from '../../queue/scheduler.js'

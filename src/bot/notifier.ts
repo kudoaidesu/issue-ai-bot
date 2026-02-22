@@ -2,7 +2,7 @@ import { type Client, type TextChannel, type Message, type ThreadChannel, Channe
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 import { COLORS, createEmbed, createQueueButtons, createPrButtons } from './theme.js'
-import type { ProgressData, ProgressStage } from '../agents/coder/types.js'
+import type { ProgressData, ProgressStage } from '../agents/taicho/types.js'
 import type { CostReport } from '../utils/cost-tracker.js'
 import type { UsageReport, UsageSnapshot, UsageAlerts } from '../utils/usage-monitor.js'
 
@@ -338,7 +338,7 @@ export async function createIssueThread(
     const thread = await channel.threads.create({
       name: `Issue #${issueNumber}: ${issueTitle.slice(0, 80)}`,
       type: ChannelType.PublicThread,
-      reason: `AI Coder Agent processing Issue #${issueNumber}`,
+      reason: `タイチョーが Issue #${issueNumber} を処理中`,
     })
 
     const embed = createEmbed(COLORS.info, `🤖 Issue #${issueNumber} の処理を開始します`, {

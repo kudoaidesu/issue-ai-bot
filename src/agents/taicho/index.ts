@@ -1,11 +1,9 @@
 import { config } from '../../config.js'
-import { runClaudeCli } from '../../llm/claude-cli.js'
 import { addComment } from '../../github/issues.js'
 import { createLogger } from '../../utils/logger.js'
 import { appendAudit } from '../../utils/audit.js'
 import { recordCost } from '../../utils/cost-tracker.js'
-import type { CoderAgentInput, CoderAgentResult } from './types.js'
-import { CODER_SYSTEM_PROMPT, buildUserPrompt } from './prompt.js'
+import type { TaichoInput, TaichoResult } from './types.js'
 import {
   generateBranchName,
   getBaseBranch,
@@ -17,20 +15,25 @@ import {
   cleanupBranch,
   resetToBase,
 } from './git.js'
+import { getStrategy, getDefaultStrategy } from './strategies/index.js'
 
-const log = createLogger('coder-agent')
+const log = createLogger('taicho')
 
-export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentResult> {
+export async function runTaicho(input: TaichoInput): Promise<TaichoResult> {
   const { issue, project } = input
   const startTime = Date.now()
-  const maxRetries = config.coder.maxRetries
+  const maxRetries = config.taicho.maxRetries
 
-  log.info(`Starting coder agent for Issue #${issue.number} (${project.repo})`)
+  const strategy = input.strategy
+    ? getStrategy(input.strategy)
+    : getDefaultStrategy()
+
+  log.info(`Starting taicho for Issue #${issue.number} (${project.repo}) [strategy: ${strategy.name}]`)
 
   appendAudit({
-    action: 'coder_start',
-    actor: 'coder-agent',
-    detail: `Issue #${issue.number}: ${issue.title} (${project.repo})`,
+    action: 'taicho_start',
+    actor: 'taicho',
+    detail: `Issue #${issue.number}: ${issue.title} (${project.repo}) [strategy: ${strategy.name}]`,
     result: 'allow',
   })
 
@@ -59,32 +62,30 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
 
       void input.onProgress?.({
         stage: 'coding',
-        message: `AI がコード生成中... (試行 ${attempt + 1}/${maxRetries})`,
+        message: `タイチョーがコード生成中... (試行 ${attempt + 1}/${maxRetries})`,
         attempt: attempt + 1,
         maxAttempts: maxRetries,
       })
 
-      const result = await runClaudeCli({
-        prompt: buildUserPrompt(issue),
-        systemPrompt: CODER_SYSTEM_PROMPT,
-        model: config.llm.model,
-        maxBudgetUsd: config.coder.maxBudgetUsd,
-        cwd: project.localPath,
-        allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'],
-        timeoutMs: config.coder.timeoutMs,
-        skipPermissions: true,
+      const codingResult = await strategy.execute({
+        issue,
+        project,
+        baseBranch,
+        branchName,
+        attempt: attempt + 1,
+        maxAttempts: maxRetries,
       })
 
-      if (result.costUsd) {
-        totalCostUsd += result.costUsd
+      if (codingResult.costUsd) {
+        totalCostUsd += codingResult.costUsd
       }
 
-      // Claude がコミットを生成したか確認
+      // コミットが生成されたか確認
       void input.onProgress?.({ stage: 'verifying', message: 'コミットを確認中...' })
 
       const hasCommits = await hasNewCommits(project.localPath, baseBranch)
       if (!hasCommits) {
-        throw new Error('Claude produced no code changes')
+        throw new Error('Strategy produced no code changes')
       }
 
       // Push & PR 作成
@@ -96,16 +97,16 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
       // Issue にコメント追加
       await addComment(
         issue.number,
-        `AI Coder Agent が Draft PR を作成しました: ${prUrl}`,
+        `タイチョーが Draft PR を作成しました: ${prUrl}`,
         project.repo,
       )
 
       const durationMs = Date.now() - startTime
 
       appendAudit({
-        action: 'coder_complete',
-        actor: 'coder-agent',
-        detail: `Issue #${issue.number}: PR ${prUrl} (cost: $${totalCostUsd.toFixed(2)}, duration: ${Math.round(durationMs / 1000)}s, attempts: ${attempt + 1})`,
+        action: 'taicho_complete',
+        actor: 'taicho',
+        detail: `Issue #${issue.number}: PR ${prUrl} (strategy: ${strategy.name}, cost: $${totalCostUsd.toFixed(2)}, duration: ${Math.round(durationMs / 1000)}s, attempts: ${attempt + 1})`,
         result: 'allow',
       })
 
@@ -119,7 +120,7 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
         retryCount: attempt,
       })
 
-      log.info(`Coder agent completed for Issue #${issue.number}: ${prUrl}`)
+      log.info(`Taicho completed for Issue #${issue.number}: ${prUrl}`)
 
       void input.onProgress?.({
         stage: 'done',
@@ -175,9 +176,9 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
   })
 
   appendAudit({
-    action: 'coder_failed',
-    actor: 'coder-agent',
-    detail: `Issue #${issue.number}: ${error} (cost: $${totalCostUsd.toFixed(2)}, duration: ${Math.round(durationMs / 1000)}s)`,
+    action: 'taicho_failed',
+    actor: 'taicho',
+    detail: `Issue #${issue.number}: ${error} (strategy: ${strategy.name}, cost: $${totalCostUsd.toFixed(2)}, duration: ${Math.round(durationMs / 1000)}s)`,
     result: 'error',
   })
 
@@ -194,14 +195,14 @@ export async function runCoderAgent(input: CoderAgentInput): Promise<CoderAgentR
   try {
     await addComment(
       issue.number,
-      `AI Coder Agent が実装に失敗しました（${maxRetries}回試行）。手動での対応が必要です。\n\nエラー: ${lastError}`,
+      `タイチョーが実装に失敗しました（${maxRetries}回試行）。手動での対応が必要です。\n\nエラー: ${lastError}`,
       project.repo,
     )
   } catch {
     log.warn('Failed to add failure comment to Issue')
   }
 
-  log.error(`Coder agent failed for Issue #${issue.number}: ${error}`)
+  log.error(`Taicho failed for Issue #${issue.number}: ${error}`)
 
   return {
     success: false,

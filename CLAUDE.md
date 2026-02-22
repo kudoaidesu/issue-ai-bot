@@ -32,7 +32,7 @@
 - **GitHub連携**: `gh` CLI（トークン不要、`gh auth login` の認証セッションを使用）
 - **LLM**: Claude Code CLI / Agent SDK / Codex CLI — 用途ベースで使い分け
 - **Cronジョブ**: node-cron
-- **サンドボックス**: Docker（AI Coder 実行環境）
+- **サンドボックス**: Docker（タイチョー実行環境）
 - **ネットワーク**: Tailscale（外部アクセス）
 - **テスト**: Vitest（ユニット）
 
@@ -43,7 +43,7 @@
 | ファイル | ツール | 用途 |
 |---------|-------|------|
 | `llm/claude.ts` | Claude CLI (`claude -p`) | 軽量な1ショット処理（Issue精緻化など） |
-| `llm/agent.ts` | Agent SDK | 予算制御・進捗通知・セッション管理・危険コマンドブロック（AI Coder） |
+| `llm/agent.ts` | Agent SDK | 予算制御・進捗通知・セッション管理・危険コマンドブロック（タイチョー） |
 | `llm/codex.ts` (将来) | Codex CLI | コードレビュー |
 
 **モデルは呼び出し元が指定する:**
@@ -97,7 +97,7 @@ claude setup-token
 brew install gh
 gh auth login
 
-# 必須: Docker（AI Coder サンドボックス用）
+# 必須: Docker（タイチョー サンドボックス用）
 brew install --cask docker
 
 # Discord Bot Tokenは .env に記載
@@ -108,8 +108,9 @@ brew install --cask docker
 ```
 src/
 ├── agents/            # AIエージェント
-│   ├── issue-refiner/ # Issue精緻化AI（実装済み）
-│   └── coder/         # AI Coder Agent（Issue→コード→Draft PR）
+│   ├── torisan/       # トリさん（取次）: Issue精緻化AI
+│   └── taicho/        # タイチョー（実行隊長）: Issue→コード→Draft PR
+│       └── strategies/ # 実装戦略（claude-cli 等、差し替え可能）
 ├── bot/               # Discord Bot
 │   ├── commands/      # スラッシュコマンド (issue, status, queue, run, cron, cost)
 │   ├── events/        # Discordイベントハンドラ (messageCreate, buttonHandler, selectMenuHandler)
@@ -166,7 +167,7 @@ docs/                  # ドキュメント
                                   guildId → projects.json 逆引き
                                           │
                                   ┌───────┴───────┐
-                                  │ Issue Refiner  │ ← 曖昧な指示を精緻化
+                                  │ トリさん        │ ← 曖昧な指示を精緻化
                                   │ (claude CLI)   │ ← 不足情報は逆質問
                                   └───────┬───────┘
                                           │
@@ -188,8 +189,8 @@ docs/                  # ドキュメント
                                       │  └────┬────┘
                                       │       │
                                   ┌───┴───────┴───┐
-                                  │ AI Coder       │ ← Docker サンドボックス内
-                                  │ (Agent SDK)    │ ← claude -p --cwd で自動コンテキスト
+                                  │ タイチョー      │ ← Strategy パターンで実装切替
+                                  │ (claude CLI)   │ ← claude -p --cwd で自動コンテキスト
                                   └───────┬───────┘
                                           │
                                   └── 結果通知 → プロジェクト別 Discord サーバー
@@ -219,7 +220,7 @@ docs/                  # ドキュメント
 | 1 | Issue精緻化 & キューイング | **完了** |
 | 2 | コード簡素化 + マルチプロジェクト基盤 | **完了** |
 | 3 | セキュリティ基盤 + ガードレール | **完了** |
-| 4 | AI Coder Agent（コード生成→PR作成） | **完了** |
+| 4 | タイチョー Agent（コード生成→PR作成） | **完了** |
 | 5 | Discord UX強化（Thread/ボタン/進捗/DM） | **完了** |
 | 6 | 運用強化（コスト/レート制限/キュー強化） | **一部完了** (6-1〜6-3) |
 

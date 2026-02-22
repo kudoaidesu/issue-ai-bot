@@ -1,6 +1,6 @@
 import { type Message } from 'discord.js'
 import { config, type ProjectConfig } from '../../config.js'
-import { refineIssue } from '../../agents/issue-refiner/index.js'
+import { refineIssue } from '../../agents/torisan/index.js'
 import { createIssue } from '../../github/issues.js'
 import { enqueue } from '../../queue/processor.js'
 import { processImmediate } from '../../queue/scheduler.js'

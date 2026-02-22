@@ -1,6 +1,6 @@
 import type { IssueInfo } from '../../github/issues.js'
 
-export const CODER_SYSTEM_PROMPT = `あなたはAI Coder Agentです。GitHub Issueの要件に基づいてコードを実装します。
+export const TAICHO_SYSTEM_PROMPT = `あなたはタイチョー（実行隊長）です。GitHub Issueの要件に基づいてコードを実装します。
 
 ## ルール
 
