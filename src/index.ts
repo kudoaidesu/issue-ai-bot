@@ -2,8 +2,9 @@ import { config } from './config.js'
 import { createLogger } from './utils/logger.js'
 import { startBot } from './bot/index.js'
 import { startScheduler, stopScheduler, setProcessHandler } from './queue/scheduler.js'
-import { notifyProcessingStart, notifyProcessingComplete } from './bot/notifier.js'
+import { notifyProcessingStart, notifyProcessingComplete, notifyError } from './bot/notifier.js'
 import { getIssue } from './github/issues.js'
+import { runCoderAgent } from './agents/coder/index.js'
 
 const log = createLogger('main')
 
@@ -14,17 +15,41 @@ async function main(): Promise<void> {
   log.info('GitHub: gh CLI (authenticated session)')
   log.info(`Cron schedule: ${config.cron.schedule}`)
 
-  // キュー処理ハンドラを設定（Phase 4で実装するAI Coderに差し替え可能）
+  // キュー処理ハンドラ: AI Coder Agent で Issue を自動実装 → Draft PR 作成
   setProcessHandler(async (issueNumber: number, repository: string) => {
-    await notifyProcessingStart(issueNumber)
+    const project = config.projects.find((p) => p.repo === repository)
+    if (!project) {
+      log.error(`No project config found for repository: ${repository}`)
+      await notifyError(`プロジェクト設定が見つかりません: ${repository}`)
+      return
+    }
+
+    await notifyProcessingStart(issueNumber, project.channelId)
 
     const issue = await getIssue(issueNumber, repository)
     log.info(`Processing Issue #${issueNumber} (${repository}): ${issue.title}`)
 
-    // TODO: Phase 4 — AI Coder Agentを呼び出してコード生成→PR作成
-    log.info(`Issue #${issueNumber} — AI Coder Agent is not yet implemented`)
+    const result = await runCoderAgent({ issue, project })
 
-    await notifyProcessingComplete(issueNumber, true, 'AI Coderは未実装です。Issue情報をログに記録しました。')
+    if (result.success) {
+      const costStr = result.costUsd ? ` (コスト: $${result.costUsd.toFixed(2)})` : ''
+      const durationStr = result.durationMs
+        ? ` (所要時間: ${Math.round(result.durationMs / 1000)}秒)`
+        : ''
+      await notifyProcessingComplete(
+        issueNumber,
+        true,
+        `Draft PR 作成完了: ${result.prUrl}${costStr}${durationStr}`,
+        project.channelId,
+      )
+    } else {
+      await notifyProcessingComplete(
+        issueNumber,
+        false,
+        `AI Coder 失敗: ${result.error} (試行回数: ${result.retryCount})`,
+        project.channelId,
+      )
+    }
   })
 
   // Discord Bot起動

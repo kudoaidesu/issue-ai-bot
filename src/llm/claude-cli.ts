@@ -10,6 +10,8 @@ export interface ClaudeCliOptions {
   maxBudgetUsd?: number
   cwd?: string
   allowedTools?: string[]
+  timeoutMs?: number
+  skipPermissions?: boolean
 }
 
 export interface ClaudeCliResult {
@@ -46,6 +48,9 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
     if (options.allowedTools) {
       args.push('--allowedTools', ...options.allowedTools)
     }
+    if (options.skipPermissions) {
+      args.push('--dangerously-skip-permissions')
+    }
 
     log.info(`Executing: claude -p "${options.prompt.slice(0, 60)}..."`)
 
@@ -55,7 +60,7 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
       {
         cwd: options.cwd ?? process.cwd(),
         maxBuffer: 10 * 1024 * 1024, // 10MB
-        timeout: 5 * 60 * 1000, // 5分
+        timeout: options.timeoutMs ?? 5 * 60 * 1000,
       },
       (error, stdout, stderr) => {
         if (stderr) {

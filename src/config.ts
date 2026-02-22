@@ -54,6 +54,11 @@ export const config = {
   queue: {
     dataDir: optional('QUEUE_DATA_DIR', './data'),
   },
+  coder: {
+    maxBudgetUsd: Number(optional('CODER_MAX_BUDGET_USD', '5')),
+    maxRetries: Number(optional('CODER_MAX_RETRIES', '3')),
+    timeoutMs: Number(optional('CODER_TIMEOUT_MS', String(30 * 60 * 1000))),
+  },
 } as const
 
 export function findProjectByGuildId(guildId: string): ProjectConfig | undefined {
