@@ -2,9 +2,16 @@ import { config } from './config.js'
 import { createLogger } from './utils/logger.js'
 import { startBot } from './bot/index.js'
 import { startScheduler, stopScheduler, setProcessHandler } from './queue/scheduler.js'
-import { notifyProcessingStart, notifyProcessingComplete, notifyError } from './bot/notifier.js'
+import {
+  notifyProcessingStart,
+  notifyProcessingComplete,
+  notifyError,
+  createIssueThread,
+  updateProgress,
+} from './bot/notifier.js'
 import { getIssue } from './github/issues.js'
 import { runCoderAgent } from './agents/coder/index.js'
+import type { ProgressReporter } from './agents/coder/types.js'
 
 const log = createLogger('main')
 
@@ -24,31 +31,46 @@ async function main(): Promise<void> {
       return
     }
 
-    await notifyProcessingStart(issueNumber, project.channelId)
-
     const issue = await getIssue(issueNumber, repository)
     log.info(`Processing Issue #${issueNumber} (${repository}): ${issue.title}`)
 
-    const result = await runCoderAgent({ issue, project })
+    // Thread 作成を試行
+    const threadCtx = await createIssueThread(issueNumber, issue.title, project.channelId)
 
-    if (result.success) {
-      const costStr = result.costUsd ? ` (コスト: $${result.costUsd.toFixed(2)})` : ''
-      const durationStr = result.durationMs
-        ? ` (所要時間: ${Math.round(result.durationMs / 1000)}秒)`
-        : ''
-      await notifyProcessingComplete(
-        issueNumber,
-        true,
-        `Draft PR 作成完了: ${result.prUrl}${costStr}${durationStr}`,
-        project.channelId,
-      )
-    } else {
-      await notifyProcessingComplete(
-        issueNumber,
-        false,
-        `AI Coder 失敗: ${result.error} (試行回数: ${result.retryCount})`,
-        project.channelId,
-      )
+    if (!threadCtx) {
+      // フォールバック: レガシー通知
+      await notifyProcessingStart(issueNumber, project.channelId)
+    }
+
+    // ProgressReporter クロージャ構築
+    const onProgress: ProgressReporter | undefined = threadCtx
+      ? (data) => { void updateProgress(threadCtx, data) }
+      : undefined
+
+    const result = await runCoderAgent({ issue, project, onProgress })
+
+    // Thread 使用時は onProgress 経由で done/failed が通知済み
+    // Thread 未使用時はレガシー通知にフォールバック
+    if (!threadCtx) {
+      if (result.success) {
+        const costStr = result.costUsd ? ` (コスト: $${result.costUsd.toFixed(2)})` : ''
+        const durationStr = result.durationMs
+          ? ` (所要時間: ${Math.round(result.durationMs / 1000)}秒)`
+          : ''
+        await notifyProcessingComplete(
+          issueNumber,
+          true,
+          `Draft PR 作成完了: ${result.prUrl}${costStr}${durationStr}`,
+          project.channelId,
+        )
+      } else {
+        await notifyProcessingComplete(
+          issueNumber,
+          false,
+          `AI Coder 失敗: ${result.error} (試行回数: ${result.retryCount})`,
+          project.channelId,
+        )
+      }
     }
   })
 
