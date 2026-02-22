@@ -4,7 +4,9 @@ import { createLogger } from '../utils/logger.js'
 import { dequeue, getStats, updateStatus, markForRetry } from './processor.js'
 import { acquireLock, releaseLock, isDailyBudgetExceeded } from './rate-limiter.js'
 import { getDailyCost, getCostReport } from '../utils/cost-tracker.js'
-import { notifyCostReport, notifyCostAlert } from '../bot/notifier.js'
+import { notifyCostReport, notifyCostAlert, notifyUsageReport } from '../bot/notifier.js'
+import { scrapeUsage } from '../utils/usage-monitor.js'
+import type { UsageReport } from '../utils/usage-monitor.js'
 
 const log = createLogger('scheduler')
 
@@ -116,6 +118,19 @@ async function reportStatus(): Promise<void> {
   }
 }
 
+async function monitorUsage(): Promise<void> {
+  log.info('Usage monitor triggered')
+  try {
+    const report = await scrapeUsage()
+    for (const project of config.projects) {
+      await notifyUsageReport(report, project.channelId)
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log.error(`Usage monitor failed: ${message}`)
+  }
+}
+
 export function startScheduler(): void {
   const processTask = cron.schedule(
     config.cron.schedule,
@@ -136,6 +151,16 @@ export function startScheduler(): void {
   )
   tasks.set('status-report', reportTask)
   log.info(`Status report scheduled: ${config.cron.reportSchedule}`)
+
+  const usageTask = cron.schedule(
+    config.usageMonitor.cronSchedule,
+    () => {
+      void monitorUsage()
+    },
+    { timezone: 'Asia/Tokyo' },
+  )
+  tasks.set('usage-monitor', usageTask)
+  log.info(`Usage monitor scheduled: ${config.usageMonitor.cronSchedule}`)
 }
 
 export function stopScheduler(): void {
@@ -149,12 +174,18 @@ export function getScheduledTasks(): { name: string; schedule: string }[] {
   return [
     { name: 'queue-process', schedule: config.cron.schedule },
     { name: 'status-report', schedule: config.cron.reportSchedule },
+    { name: 'usage-monitor', schedule: config.usageMonitor.cronSchedule },
   ]
 }
 
 export async function runNow(): Promise<void> {
   log.info('Manual queue processing triggered')
   await processQueue()
+}
+
+export async function runUsageMonitorNow(): Promise<UsageReport> {
+  log.info('Manual usage monitor triggered')
+  return scrapeUsage()
 }
 
 // --- 即時処理 ---
