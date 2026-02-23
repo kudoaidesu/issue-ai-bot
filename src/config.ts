@@ -139,6 +139,11 @@ export const config = {
     ttlMs: Number(optional('SESSION_TTL_MS', String(24 * 60 * 60 * 1000))),
     maxPerGuild: Number(optional('SESSION_MAX_PER_GUILD', '50')),
   },
+  dashboard: {
+    enabled: optional('DASHBOARD_ENABLED', 'true') === 'true',
+    port: Number(optional('DASHBOARD_PORT', '3000')),
+    host: optional('DASHBOARD_HOST', '127.0.0.1'),
+  },
   usageMonitor: {
     scrapeSchedule: optional('USAGE_SCRAPE_SCHEDULE', '*/20 * * * *'),
     reportSchedule: optional('USAGE_REPORT_SCHEDULE', '0 9 * * *'),

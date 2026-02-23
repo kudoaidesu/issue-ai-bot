@@ -3,6 +3,8 @@ import { createLogger } from './utils/logger.js'
 import { startBot } from './bot/index.js'
 import { startScheduler, stopScheduler, setProcessHandler } from './queue/scheduler.js'
 import { initializeMemory, shutdownMemory } from './memory/index.js'
+import { startDashboard } from './dashboard/server.js'
+import type { Server } from 'node:http'
 import {
   notifyProcessingStart,
   notifyProcessingComplete,
@@ -87,12 +89,19 @@ async function main(): Promise<void> {
   startScheduler()
   log.info('Cron scheduler started')
 
+  // ダッシュボード起動
+  let dashboardServer: Server | undefined
+  if (config.dashboard.enabled) {
+    dashboardServer = startDashboard()
+  }
+
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
     log.info('Shutting down...')
     stopScheduler()
     shutdownMemory()
     client.destroy()
+    dashboardServer?.close()
     log.info('Goodbye')
     process.exit(0)
   }
