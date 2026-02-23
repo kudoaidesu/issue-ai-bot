@@ -1,4 +1,5 @@
 import { type ButtonInteraction } from 'discord.js'
+import { execSync } from 'node:child_process'
 import { parseCustomId } from '../theme.js'
 import { findById, removeItem } from '../../queue/processor.js'
 import { runNow } from '../../queue/scheduler.js'
@@ -19,6 +20,9 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
       break
     case 'pr_merge':
       await handlePrMerge(interaction, payload)
+      break
+    case 'kill_session':
+      await handleKillSession(interaction, payload)
       break
     default:
       log.warn(`Unknown button action: ${action}`)
@@ -108,5 +112,46 @@ async function handlePrMerge(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await interaction.editReply(`マージに失敗しました: ${message}`)
+  }
+}
+
+async function handleKillSession(
+  interaction: ButtonInteraction,
+  pid: string,
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true })
+
+  const numericPid = parseInt(pid, 10)
+  if (isNaN(numericPid) || numericPid <= 0) {
+    await interaction.editReply('無効なプロセスIDです。')
+    return
+  }
+
+  try {
+    // プロセスが Claude Code であることを確認
+    const cmd = execSync(`ps -o command= -p ${numericPid} 2>/dev/null`).toString().trim()
+    if (!cmd.includes('claude')) {
+      await interaction.editReply(
+        `PID ${numericPid} はClaude Codeプロセスではありません (${cmd.slice(0, 50)})`,
+      )
+      return
+    }
+
+    process.kill(numericPid, 'SIGTERM')
+    log.info(`Claude Code session killed: PID ${numericPid}`)
+    await interaction.editReply(`Claude Codeセッション (PID: ${numericPid}) を停止しました。`)
+
+    try {
+      await interaction.message.edit({ components: [] })
+    } catch {
+      // pass
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('ESRCH')) {
+      await interaction.editReply(`PID ${numericPid} は既に終了しています。`)
+    } else {
+      await interaction.editReply(`停止に失敗しました: ${message}`)
+    }
   }
 }

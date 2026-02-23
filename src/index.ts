@@ -3,6 +3,8 @@ import { createLogger } from './utils/logger.js'
 import { startBot } from './bot/index.js'
 import { startScheduler, stopScheduler, setProcessHandler } from './queue/scheduler.js'
 import { initializeMemory, shutdownMemory } from './memory/index.js'
+import { startDashboard } from './dashboard/server.js'
+import type { Server } from 'node:http'
 import {
   notifyProcessingStart,
   notifyProcessingComplete,
@@ -11,8 +13,8 @@ import {
   updateProgress,
 } from './bot/notifier.js'
 import { getIssue } from './github/issues.js'
-import { runCoderAgent } from './agents/coder/index.js'
-import type { ProgressReporter } from './agents/coder/types.js'
+import { runTaicho } from './agents/taicho/index.js'
+import type { ProgressReporter } from './agents/taicho/types.js'
 
 const log = createLogger('main')
 
@@ -23,7 +25,7 @@ async function main(): Promise<void> {
   log.info('GitHub: gh CLI (authenticated session)')
   log.info(`Cron schedule: ${config.cron.schedule}`)
 
-  // キュー処理ハンドラ: AI Coder Agent で Issue を自動実装 → Draft PR 作成
+  // キュー処理ハンドラ: タイチョーが Issue を自動実装 → Draft PR 作成
   setProcessHandler(async (issueNumber: number, repository: string, _queueItemId: string) => {
     const project = config.projects.find((p) => p.repo === repository)
     if (!project) {
@@ -48,27 +50,26 @@ async function main(): Promise<void> {
       ? (data) => { void updateProgress(threadCtx, data) }
       : undefined
 
-    const result = await runCoderAgent({ issue, project, onProgress })
+    const result = await runTaicho({ issue, project, onProgress })
 
     // Thread 使用時は onProgress 経由で done/failed が通知済み
     // Thread 未使用時はレガシー通知にフォールバック
     if (!threadCtx) {
       if (result.success) {
-        const costStr = result.costUsd ? ` (コスト: $${result.costUsd.toFixed(2)})` : ''
         const durationStr = result.durationMs
           ? ` (所要時間: ${Math.round(result.durationMs / 1000)}秒)`
           : ''
         await notifyProcessingComplete(
           issueNumber,
           true,
-          `Draft PR 作成完了: ${result.prUrl}${costStr}${durationStr}`,
+          `Draft PR 作成完了: ${result.prUrl}${durationStr}`,
           project.channelId,
         )
       } else {
         await notifyProcessingComplete(
           issueNumber,
           false,
-          `AI Coder 失敗: ${result.error} (試行回数: ${result.retryCount})`,
+          `タイチョー失敗: ${result.error} (試行回数: ${result.retryCount})`,
           project.channelId,
         )
       }
@@ -87,12 +88,19 @@ async function main(): Promise<void> {
   startScheduler()
   log.info('Cron scheduler started')
 
+  // ダッシュボード起動
+  let dashboardServer: Server | undefined
+  if (config.dashboard.enabled) {
+    dashboardServer = startDashboard()
+  }
+
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
     log.info('Shutting down...')
     stopScheduler()
     shutdownMemory()
     client.destroy()
+    dashboardServer?.close()
     log.info('Goodbye')
     process.exit(0)
   }

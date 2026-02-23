@@ -5,7 +5,6 @@ export interface LlmOptions {
   prompt: string
   systemPrompt?: string
   model?: string
-  maxBudgetUsd?: number
   maxTurns?: number
   cwd?: string
   allowedTools?: string[]
@@ -13,5 +12,4 @@ export interface LlmOptions {
 
 export interface LlmResult {
   content: string
-  costUsd?: number
 }

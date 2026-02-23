@@ -7,7 +7,7 @@ import {
   deleteSession,
 } from '../../memory/index.js'
 
-const log = createLogger('issue-refiner')
+const log = createLogger('torisan')
 
 const SYSTEM_PROMPT = `あなたはGitHub Issueを作成するための精緻化AIです。
 ユーザーからの曖昧なリクエスト（バグ報告、機能要望、メモなど）を受け取り、

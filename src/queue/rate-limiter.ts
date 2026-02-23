@@ -1,5 +1,4 @@
 import { config } from '../config.js'
-import { getDailyCost } from '../utils/cost-tracker.js'
 import { createLogger } from '../utils/logger.js'
 
 const log = createLogger('rate-limiter')
@@ -7,8 +6,8 @@ const log = createLogger('rate-limiter')
 let processing = false
 let processingStartedAt: number | null = null
 
-// ロック取得タイムアウト: coder タイムアウトの2倍
-const STALE_LOCK_MS = config.coder.timeoutMs * 2
+// ロック取得タイムアウト: taicho タイムアウトの2倍
+const STALE_LOCK_MS = config.taicho.timeoutMs * 2
 
 export function acquireLock(): boolean {
   if (processing) {
@@ -35,11 +34,3 @@ export function isLocked(): boolean {
   return processing
 }
 
-export function isDailyBudgetExceeded(): boolean {
-  const dailyCost = getDailyCost()
-  const exceeded = dailyCost >= config.queue.dailyBudgetUsd
-  if (exceeded) {
-    log.warn(`Daily budget exceeded: $${dailyCost.toFixed(2)} >= $${config.queue.dailyBudgetUsd}`)
-  }
-  return exceeded
-}

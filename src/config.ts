@@ -52,6 +52,8 @@ export interface ProjectConfig {
   repo: string
   localPath: string
   chatModel?: ChatModel
+  alertChannelId?: string
+  operationAlertChannelId?: string
 }
 
 function loadProjects(): ProjectConfig[] {
@@ -94,19 +96,19 @@ export const config = {
   cron: {
     schedule: optional('CRON_SCHEDULE', '0 1 * * *'),
     reportSchedule: optional('CRON_REPORT_SCHEDULE', '0 9 * * *'),
+    dailyUsageStatusSchedule: optional('CRON_DAILY_USAGE_STATUS_SCHEDULE', '0 18 * * *'),
   },
   queue: {
     dataDir: optional('QUEUE_DATA_DIR', './data'),
     maxBatchSize: Number(optional('QUEUE_MAX_BATCH_SIZE', '5')),
     cooldownMs: Number(optional('QUEUE_COOLDOWN_MS', '60000')),
-    dailyBudgetUsd: Number(optional('QUEUE_DAILY_BUDGET_USD', '20')),
     maxRetries: Number(optional('QUEUE_MAX_RETRIES', '2')),
     retryBaseMs: Number(optional('QUEUE_RETRY_BASE_MS', '300000')),
   },
-  coder: {
-    maxBudgetUsd: Number(optional('CODER_MAX_BUDGET_USD', '5')),
-    maxRetries: Number(optional('CODER_MAX_RETRIES', '3')),
-    timeoutMs: Number(optional('CODER_TIMEOUT_MS', String(30 * 60 * 1000))),
+  taicho: {
+    maxRetries: Number(optional('TAICHO_MAX_RETRIES', optional('CODER_MAX_RETRIES', '3'))),
+    timeoutMs: Number(optional('TAICHO_TIMEOUT_MS', optional('CODER_TIMEOUT_MS', String(30 * 60 * 1000)))),
+    strategy: optional('TAICHO_STRATEGY', 'claude-cli'),
   },
   memory: {
     enabled: optional('MEMORY_ENABLED', 'true') === 'true',
@@ -130,6 +132,15 @@ export const config = {
       model: 'haiku',
     },
     contextBudgetTokens: 2000,
+  },
+  session: {
+    ttlMs: Number(optional('SESSION_TTL_MS', String(24 * 60 * 60 * 1000))),
+    maxPerGuild: Number(optional('SESSION_MAX_PER_GUILD', '50')),
+  },
+  dashboard: {
+    enabled: optional('DASHBOARD_ENABLED', 'true') === 'true',
+    port: Number(optional('DASHBOARD_PORT', '3000')),
+    host: optional('DASHBOARD_HOST', '127.0.0.1'),
   },
   usageMonitor: {
     scrapeSchedule: optional('USAGE_SCRAPE_SCHEDULE', '*/20 * * * *'),

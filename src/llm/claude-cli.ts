@@ -7,7 +7,6 @@ export interface ClaudeCliOptions {
   prompt: string
   systemPrompt?: string
   model?: string
-  maxBudgetUsd?: number
   cwd?: string
   allowedTools?: string[]
   timeoutMs?: number
@@ -16,7 +15,6 @@ export interface ClaudeCliOptions {
 
 export interface ClaudeCliResult {
   content: string
-  costUsd?: number
 }
 
 interface ClaudeJsonOutput {
@@ -41,9 +39,6 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
     }
     if (options.model) {
       args.push('--model', options.model)
-    }
-    if (options.maxBudgetUsd) {
-      args.push('--max-budget-usd', String(options.maxBudgetUsd))
     }
     if (options.allowedTools) {
       args.push('--allowedTools', ...options.allowedTools)
@@ -97,7 +92,6 @@ export function runClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCliResult
 
         resolve({
           content: parsed.result,
-          costUsd: parsed.cost_usd,
         })
       } catch {
         // JSON解析失敗時はテキスト出力として扱う

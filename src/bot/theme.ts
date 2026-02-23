@@ -26,6 +26,7 @@ export const CUSTOM_ID = {
   queueProcessNow: (id: string) => `queue_process:${id}`,
   queueRemove: (id: string) => `queue_remove:${id}`,
   prMerge: (prUrl: string) => `pr_merge:${prUrl}`,
+  killSession: (pid: string) => `kill_session:${pid}`,
   projectSelect: 'project_select',
 } as const
 

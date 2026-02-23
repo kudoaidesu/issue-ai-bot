@@ -11,6 +11,7 @@ import {
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
 import { initNotifier } from './notifier.js'
+import { expireStaleSessions, cleanupArchived } from '../session/index.js'
 import { handleMessage } from './events/messageCreate.js'
 import { handleGuildChat } from './events/guildChat.js'
 import { handleButtonInteraction } from './events/buttonHandler.js'
@@ -23,7 +24,6 @@ import * as statusCmd from './commands/status.js'
 import * as queueCmd from './commands/queue.js'
 import * as runCmd from './commands/run.js'
 import * as cronCmd from './commands/cron.js'
-import * as costCmd from './commands/cost.js'
 import * as usageCmd from './commands/usage.js'
 import * as modelCmd from './commands/model.js'
 
@@ -35,7 +35,7 @@ interface Command {
 }
 
 const commands = new Collection<string, Command>()
-const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, costCmd, usageCmd, modelCmd]
+const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, usageCmd, modelCmd]
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd)
@@ -72,6 +72,14 @@ export async function startBot(): Promise<Client> {
 
     initNotifier(client)
     checkModelListFreshness()
+
+    // セッションクリーンアップ: 起動時 + 1時間ごと
+    expireStaleSessions()
+    cleanupArchived()
+    setInterval(() => {
+      expireStaleSessions()
+      cleanupArchived()
+    }, 60 * 60 * 1000)
   })
 
   client.on(Events.InteractionCreate, async (interaction) => {

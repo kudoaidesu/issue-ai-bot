@@ -3,7 +3,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js'
 import { findProjectByGuildId } from '../../config.js'
-import { refineIssue } from '../../agents/issue-refiner/index.js'
+import { refineIssue } from '../../agents/torisan/index.js'
 import { createIssue } from '../../github/issues.js'
 import { enqueue } from '../../queue/processor.js'
 import { processImmediate } from '../../queue/scheduler.js'
@@ -93,19 +93,6 @@ export async function execute(
         break
       }
 
-      case 'budget_exceeded': {
-        const queueItem = enqueue(issue.number, project.repo, 'high')
-        await interaction.editReply(
-          `Issue #${issue.number} を作成しました（予算超過、キューに追加）: ${issue.htmlUrl}`,
-        )
-        if (queueItem) {
-          await notifyIssueCreated(
-            issue.number, issue.title, issue.htmlUrl, issue.labels,
-            project.channelId, queueItem.id,
-          )
-        }
-        break
-      }
 
       case 'no_handler': {
         const queueItem = enqueue(issue.number, project.repo, 'high')

@@ -1,6 +1,6 @@
-import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
+import { appendFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { config } from '../config.js'
 import { createLogger } from './logger.js'
 
@@ -143,6 +143,14 @@ async function createBrowserContext(): Promise<BrowserContext> {
 
   if (!existsSync(userDataDir)) {
     mkdirSync(userDataDir, { recursive: true })
+  }
+
+  // 前回のプロセスが異常終了した場合に残る SingletonLock を削除する
+  // 残っていると "Failed to create a ProcessSingleton" で起動失敗しクラッシュにつながる
+  const singletonLock = resolve(userDataDir, 'SingletonLock')
+  if (existsSync(singletonLock)) {
+    unlinkSync(singletonLock)
+    log.warn('Removed stale Chrome SingletonLock before launch')
   }
 
   const context = await chromium.launchPersistentContext(userDataDir, {

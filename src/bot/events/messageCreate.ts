@@ -1,6 +1,6 @@
 import { type Message } from 'discord.js'
 import { config, type ProjectConfig } from '../../config.js'
-import { refineIssue } from '../../agents/issue-refiner/index.js'
+import { refineIssue } from '../../agents/torisan/index.js'
 import { createIssue } from '../../github/issues.js'
 import { enqueue } from '../../queue/processor.js'
 import { processImmediate } from '../../queue/scheduler.js'
@@ -8,16 +8,23 @@ import { notifyIssueCreated, notifyImmediateStart } from '../notifier.js'
 import { createLogger } from '../../utils/logger.js'
 import { validateDiscordInput, sanitizePromptInput } from '../../utils/sanitize.js'
 import { createProjectSelectMenu } from '../theme.js'
+import {
+  getSession,
+  createSession as createRegistrySession,
+  deleteSession as deleteRegistrySession,
+} from '../../session/index.js'
 
 const log = createLogger('dm-handler')
 
-// DM会話のセッション管理（ユーザーID → セッションID）
-const activeSessions = new Map<string, string>()
 // DM時のプロジェクト選択を保持（ユーザーID → プロジェクト）
 const userProjects = new Map<string, ProjectConfig>()
 
 export function setUserProject(userId: string, project: ProjectConfig): void {
   userProjects.set(userId, project)
+}
+
+function dmChannelKey(userId: string): string {
+  return `dm-${userId}`
 }
 
 function resolveProjectForDm(userId: string): ProjectConfig | null {
@@ -46,9 +53,11 @@ export async function handleMessage(message: Message): Promise<void> {
 
   if (!content) return
 
+  const channelKey = dmChannelKey(userId)
+
   // キャンセルコマンド
   if (content.toLowerCase() === 'cancel' || content === 'キャンセル') {
-    activeSessions.delete(userId)
+    deleteRegistrySession(channelKey)
     userProjects.delete(userId)
     await message.reply('セッションをキャンセルしました。')
     return
@@ -70,11 +79,20 @@ export async function handleMessage(message: Message): Promise<void> {
     return
   }
 
-  // セッション管理: ユーザーごとに1セッション
-  let sessionId = activeSessions.get(userId)
-  if (!sessionId) {
+  // セッション管理: SessionRegistry から取得 or 新規作成
+  let sessionId: string
+  const existingSession = getSession(channelKey)
+  if (existingSession) {
+    sessionId = existingSession.sessionId
+  } else {
     sessionId = `dm-${userId}-${Date.now()}`
-    activeSessions.set(userId, sessionId)
+    createRegistrySession({
+      sessionId,
+      channelId: channelKey,
+      guildId: 'dm',
+      summary: content.slice(0, 200),
+      model: 'sonnet',
+    })
   }
 
   // 入力バリデーション + サニタイズ
@@ -140,20 +158,6 @@ export async function handleMessage(message: Message): Promise<void> {
           break
         }
 
-        case 'budget_exceeded': {
-          const queueItem = enqueue(issue.number, project.repo, 'high')
-          await message.reply(
-            `Issue #${issue.number} を作成しました。予算超過のため、キューに追加しました。\n${issue.htmlUrl}`,
-          )
-          if (queueItem) {
-            await notifyIssueCreated(
-              issue.number, issue.title, issue.htmlUrl, issue.labels,
-              project.channelId, queueItem.id,
-            )
-          }
-          break
-        }
-
         case 'no_handler': {
           const queueItem = enqueue(issue.number, project.repo, 'high')
           await message.reply(
@@ -186,12 +190,12 @@ export async function handleMessage(message: Message): Promise<void> {
     }
 
     // セッション終了
-    activeSessions.delete(userId)
+    deleteRegistrySession(channelKey)
     userProjects.delete(userId)
   } catch (err) {
     log.error('DM processing failed', err)
     await message.reply('エラーが発生しました。もう一度試してください。')
-    activeSessions.delete(userId)
+    deleteRegistrySession(channelKey)
     userProjects.delete(userId)
   }
 }
