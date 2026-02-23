@@ -30,6 +30,8 @@ export interface TaichoInput {
   strategy?: string
 }
 
+export type IssueDifficulty = 'S' | 'M' | 'L' | 'XL'
+
 export interface TaichoResult {
   success: boolean
   prUrl?: string
@@ -37,6 +39,14 @@ export interface TaichoResult {
   durationMs?: number
   error?: string
   retryCount: number
+
+  // 評価用フィールド（Issue #26）
+  difficulty?: IssueDifficulty
+  strategy?: string
+  commitCount?: number
+  linesAdded?: number
+  linesRemoved?: number
+  filesChanged?: number
 }
 
 // --- Strategy インターフェース ---
