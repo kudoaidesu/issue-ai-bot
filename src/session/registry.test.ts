@@ -21,12 +21,14 @@ vi.mock('../config.js', () => {
 
 import {
   getSession,
+  getSessionById,
   getSessionsByGuild,
   getAllSessions,
   createSession,
   updateSessionActivity,
   deleteSession,
   archiveSession,
+  reassignSession,
   expireStaleSessions,
   cleanupArchived,
 } from './registry.js'
@@ -209,6 +211,62 @@ describe('SessionRegistry', () => {
       const removed = cleanupArchived()
       expect(removed).toBe(1)
       expect(getAllSessions()).toHaveLength(1)
+    })
+  })
+
+  describe('getSessionById', () => {
+    it('should find session by sessionId', () => {
+      createSession({ sessionId: 'find-me', channelId: 'c1', guildId: 'g1', summary: 'Find', model: 'haiku' })
+      createSession({ sessionId: 'other', channelId: 'c2', guildId: 'g1', summary: 'Other', model: 'haiku' })
+
+      const found = getSessionById('find-me')
+      expect(found?.sessionId).toBe('find-me')
+      expect(found?.channelId).toBe('c1')
+    })
+
+    it('should return undefined for non-existent sessionId', () => {
+      expect(getSessionById('nonexistent')).toBeUndefined()
+    })
+
+    it('should not find archived sessions', () => {
+      createSession({ sessionId: 'archived-one', channelId: 'c1', guildId: 'g1', summary: 'A', model: 'haiku' })
+      archiveSession('c1')
+
+      expect(getSessionById('archived-one')).toBeUndefined()
+    })
+  })
+
+  describe('reassignSession', () => {
+    it('should move session to a new channel', () => {
+      createSession({ sessionId: 's1', channelId: 'c1', guildId: 'g1', summary: 'Moving', model: 'haiku' })
+
+      const result = reassignSession('s1', 'c2')
+      expect(result?.channelId).toBe('c2')
+
+      // 元のチャンネルにはセッションがない
+      expect(getSession('c1')).toBeUndefined()
+      // 新しいチャンネルにセッションがある
+      expect(getSession('c2')?.sessionId).toBe('s1')
+    })
+
+    it('should archive existing session in target channel', () => {
+      createSession({ sessionId: 's-existing', channelId: 'c2', guildId: 'g1', summary: 'Existing', model: 'haiku' })
+      createSession({ sessionId: 's-moving', channelId: 'c1', guildId: 'g1', summary: 'Moving', model: 'haiku' })
+
+      reassignSession('s-moving', 'c2')
+
+      // 移動したセッションがアクティブ
+      const active = getSession('c2')
+      expect(active?.sessionId).toBe('s-moving')
+
+      // 元の既存セッションはアーカイブ
+      const all = getAllSessions()
+      const archived = all.find((s) => s.sessionId === 's-existing')
+      expect(archived?.status).toBe('archived')
+    })
+
+    it('should return undefined for non-existent session', () => {
+      expect(reassignSession('nonexistent', 'c1')).toBeUndefined()
     })
   })
 

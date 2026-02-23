@@ -1,58 +1,17 @@
-import { type Message } from 'discord.js'
-import { findProjectByGuildId, type ProjectConfig } from '../../config.js'
-import { runClaudeSdk, type ClaudeSdkResult } from '../../llm/claude-sdk.js'
+import { type Message, type TextChannel } from 'discord.js'
+import { findProjectByGuildId } from '../../config.js'
 import { createLogger } from '../../utils/logger.js'
 import { sanitizePromptInput, validateDiscordInput } from '../../utils/sanitize.js'
 import { resolveChatModel, parseModelPrefix } from '../chat-model.js'
-import { getMemoryContext, saveConversation } from '../../memory/index.js'
+import { getSession } from '../../session/index.js'
 import {
-  getSession,
-  createSession,
-  updateSessionActivity,
-  deleteSession,
-} from '../../session/index.js'
+  createNewSessionAndRun,
+  resumeSessionAndRun,
+  requestSummaryIfEmpty,
+  saveToMemory,
+} from '../session-runner.js'
 
 const log = createLogger('guild-chat')
-
-const SYSTEM_PROMPT = 'あなたはDiscordサーバーのアシスタントBotです。ユーザーの質問や雑談に日本語で簡潔に回答してください。2000文字以内で返してください。技術的な質問にはコード例を含めても構いません。'
-
-async function createNewSession(
-  guildId: string,
-  channelId: string,
-  sanitized: string,
-  model: string,
-  project: ProjectConfig,
-): Promise<ClaudeSdkResult> {
-  // 新規セッション: メモリコンテキストをシステムプロンプトに注入
-  const memoryContext = await getMemoryContext(guildId, channelId, sanitized)
-  const enrichedSystemPrompt = memoryContext
-    ? `${SYSTEM_PROMPT}\n\n${memoryContext}`
-    : SYSTEM_PROMPT
-
-  const result = await runClaudeSdk({
-    prompt: sanitized,
-    systemPrompt: enrichedSystemPrompt,
-    model,
-    maxTurns: 3,
-    cwd: project.localPath,
-    settingSources: ['project'],
-    permissionMode: 'bypassPermissions',
-    timeoutMs: 180_000,
-  })
-
-  // セッションをレジストリに登録
-  if (result.sessionId) {
-    createSession({
-      sessionId: result.sessionId,
-      channelId,
-      guildId,
-      summary: sanitized.slice(0, 200),
-      model,
-    })
-  }
-
-  return result
-}
 
 export async function handleGuildChat(message: Message): Promise<void> {
   if (!message.guild) return
@@ -84,6 +43,11 @@ export async function handleGuildChat(message: Message): Promise<void> {
   const guildId = message.guild.id
   const channelId = message.channel.id
 
+  // チャンネル名・トピックを取得
+  const channel = message.channel
+  const channelName = 'name' in channel ? (channel as TextChannel).name : undefined
+  const channelTopic = 'topic' in channel ? (channel as TextChannel).topic ?? undefined : undefined
+
   log.info(`Guild chat from ${message.author.tag} (model=${model}): "${sanitized.slice(0, 50)}..."`)
 
   try {
@@ -91,62 +55,24 @@ export async function handleGuildChat(message: Message): Promise<void> {
       await message.channel.sendTyping()
     }
 
-    let result: ClaudeSdkResult
     const existingSession = getSession(channelId)
 
-    if (existingSession) {
-      // 既存セッションを resume
-      try {
-        result = await runClaudeSdk({
-          prompt: sanitized,
-          model,
-          resume: existingSession.sessionId,
-          maxTurns: 3,
-          cwd: project.localPath,
-          permissionMode: 'bypassPermissions',
-          timeoutMs: 180_000,
-        })
-        updateSessionActivity(channelId, sanitized.slice(0, 200))
-        log.info(`Resumed session ${existingSession.sessionId.slice(0, 12)}...`)
-      } catch (err) {
-        // resume 失敗 → セッション削除して新規作成
-        log.warn(`Session resume failed, creating new session: ${err}`)
-        deleteSession(channelId)
-        result = await createNewSession(guildId, channelId, sanitized, model, project)
-      }
-    } else {
-      // 新規セッション作成
-      result = await createNewSession(guildId, channelId, sanitized, model, project)
-    }
+    let result = existingSession
+      ? await resumeSessionAndRun(
+          existingSession.sessionId, channelId, sanitized, model, project, guildId, channelName, channelTopic,
+        )
+      : await createNewSessionAndRun(
+          guildId, channelId, sanitized, model, project, channelName, channelTopic,
+        )
 
-    // SDK が 0 文字を返した場合（ツール実行のみで終わった場合）、要約を要求する
-    if (!result.content && result.sessionId) {
-      log.info(`SDK returned 0 chars, requesting summary from session ${result.sessionId.slice(0, 12)}...`)
-      try {
-        const summaryResult = await runClaudeSdk({
-          prompt: '今の操作の結果を日本語で簡潔に教えてください。',
-          model,
-          resume: result.sessionId,
-          maxTurns: 1,
-          cwd: project.localPath,
-          permissionMode: 'bypassPermissions',
-          timeoutMs: 30_000,
-        })
-        result = summaryResult
-      } catch (err) {
-        log.warn(`Summary request failed: ${err}`)
-      }
-    }
+    // SDK が 0 文字を返した場合の要約フォールバック
+    result = await requestSummaryIfEmpty(result, model, project)
 
     const reply = result.content.slice(0, 2000)
     await message.reply(reply || '処理は完了しましたが、返答内容を取得できませんでした。')
 
-    // 会話をメモリにも保存（検索/コンパクション用）
-    const now = new Date().toISOString()
-    await saveConversation(guildId, channelId, [
-      { role: 'user', userId: message.author.id, username: message.author.tag, content: sanitized, timestamp: now },
-      { role: 'assistant', content: result.content, timestamp: now },
-    ])
+    // 会話をメモリに保存
+    await saveToMemory(guildId, channelId, message.author.id, message.author.tag, sanitized, result.content)
   } catch (err) {
     log.error('Guild chat failed', err)
     await message.reply('すみません、応答の生成に失敗しました。')

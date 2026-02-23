@@ -7,6 +7,7 @@ import {
   REST,
   Routes,
   type ChatInputCommandInteraction,
+  type AutocompleteInteraction,
 } from 'discord.js'
 import { config } from '../config.js'
 import { createLogger } from '../utils/logger.js'
@@ -26,16 +27,19 @@ import * as runCmd from './commands/run.js'
 import * as cronCmd from './commands/cron.js'
 import * as usageCmd from './commands/usage.js'
 import * as modelCmd from './commands/model.js'
+import * as askCmd from './commands/ask.js'
+import * as sessionCmd from './commands/session.js'
 
 const log = createLogger('bot')
 
 interface Command {
   data: { name: string; toJSON: () => unknown }
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>
+  autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>
 }
 
 const commands = new Collection<string, Command>()
-const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, usageCmd, modelCmd]
+const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, usageCmd, modelCmd, askCmd, sessionCmd]
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd)
@@ -83,6 +87,19 @@ export async function startBot(): Promise<Client> {
   })
 
   client.on(Events.InteractionCreate, async (interaction) => {
+    // オートコンプリート
+    if (interaction.isAutocomplete()) {
+      const command = commands.get(interaction.commandName)
+      if (command?.autocomplete) {
+        try {
+          await command.autocomplete(interaction)
+        } catch (err) {
+          log.error(`Autocomplete ${interaction.commandName} failed`, err)
+        }
+      }
+      return
+    }
+
     // スラッシュコマンド
     if (interaction.isChatInputCommand()) {
       const command = commands.get(interaction.commandName)

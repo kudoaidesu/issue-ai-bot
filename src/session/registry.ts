@@ -128,6 +128,32 @@ export function deleteSession(channelId: string): void {
   log.info(`Deleted session ${removed.sessionId} for channel ${channelId}`)
 }
 
+export function getSessionById(sessionId: string): SessionEntry | undefined {
+  const sessions = load()
+  return sessions.find((s) => s.sessionId === sessionId && s.status === 'active')
+}
+
+export function reassignSession(sessionId: string, newChannelId: string): SessionEntry | undefined {
+  const sessions = load()
+  const session = sessions.find((s) => s.sessionId === sessionId && s.status === 'active')
+  if (!session) return undefined
+
+  // 移動先チャンネルの既存アクティブセッションをアーカイブ
+  for (const s of sessions) {
+    if (s.channelId === newChannelId && s.status === 'active' && s.sessionId !== sessionId) {
+      s.status = 'archived'
+      log.info(`Archived session ${s.sessionId} in target channel ${newChannelId}`)
+    }
+  }
+
+  const oldChannelId = session.channelId
+  session.channelId = newChannelId
+  session.lastActiveAt = new Date().toISOString()
+  save(sessions)
+  log.info(`Reassigned session ${sessionId} from channel ${oldChannelId} to ${newChannelId}`)
+  return session
+}
+
 export function archiveSession(channelId: string): void {
   const sessions = load()
   const session = sessions.find(
