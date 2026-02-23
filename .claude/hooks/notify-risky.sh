@@ -39,11 +39,55 @@ if [ "$RISKY" = true ]; then
   SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
   TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 
-  # 作業コンテキスト
+  # 作業コンテキスト取得
+  # type=="user" の最後のテキストメッセージを取得、システム注入（<で始まる）を除外
   CONTEXT="(取得不可)"
   if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-    CONTEXT=$(tail -50 "$TRANSCRIPT_PATH" | jq -r 'select(.type == "human") | .message.content' 2>/dev/null | tail -1 | head -c 200 || echo "(取得不可)")
+    CONTEXT=$(jq -rs '[.[] | select(.type == "user") | .message.content[]? | select(.type == "text") | .text | select(startswith("<") | not)] | last // ""' "$TRANSCRIPT_PATH" 2>/dev/null | head -c 200)
     [ -z "$CONTEXT" ] && CONTEXT="(取得不可)"
+  fi
+
+  # コマンドの補足説明（人が読みやすい形式）
+  # シェルリダイレクト記号を除去してからパース
+  CMD_CLEAN=$(echo "$COMMAND" | sed 's/2>&1//g; s/>\/dev\/null//g')
+  SUMMARY=""
+
+  if echo "$COMMAND" | grep -qiE 'git\s+push'; then
+    ARGS=$(echo "$CMD_CLEAN" | awk '{found=0; for(i=1;i<=NF;i++){if(found) print $i; if($i=="push") found=1}}')
+    REMOTE=""; BRANCH=""
+    while read -r word; do
+      case "$word" in -*) continue ;; "") continue ;; *)
+        if [ -z "$REMOTE" ]; then REMOTE="$word"
+        elif [ -z "$BRANCH" ]; then BRANCH="$word"; break
+        fi ;;
+      esac
+    done <<< "$ARGS"
+    if [ -n "$BRANCH" ] && [ -n "$REMOTE" ]; then
+      SUMMARY="${BRANCH} ブランチを ${REMOTE} にプッシュ"
+    elif [ -n "$REMOTE" ]; then
+      SUMMARY="${REMOTE} にプッシュ"
+    else
+      SUMMARY="リモートにプッシュ"
+    fi
+
+  elif echo "$COMMAND" | grep -qiE 'git\s+branch\s+-[dD]'; then
+    BRANCH=$(echo "$CMD_CLEAN" | awk '{for(i=1;i<=NF;i++) if($i~/^-[dD]$/) {print $(i+1); exit}}')
+    SUMMARY="${BRANCH:-?} ブランチを削除"
+
+  elif echo "$COMMAND" | grep -qiE 'npm\s+publish'; then
+    SUMMARY="パッケージを npm に公開"
+
+  elif echo "$COMMAND" | grep -qiE 'git\s+merge'; then
+    TARGET=$(echo "$CMD_CLEAN" | awk '{found=0; for(i=1;i<=NF;i++){if(found && substr($i,1,1)!="-"){print $i; exit} if($i=="merge") found=1}}')
+    SUMMARY="${TARGET:-?} をマージ"
+
+  elif echo "$COMMAND" | grep -qiE 'git\s+rebase'; then
+    TARGET=$(echo "$CMD_CLEAN" | awk '{found=0; for(i=1;i<=NF;i++){if(found && substr($i,1,1)!="-"){print $i; exit} if($i=="rebase") found=1}}')
+    SUMMARY="${TARGET:-?} にリベース"
+
+  elif echo "$COMMAND" | grep -qiE 'rm\s+-r'; then
+    TARGET=$(echo "$CMD_CLEAN" | awk '{found=0; for(i=1;i<=NF;i++){if(found && substr($i,1,1)!="-"){print $i; exit} if($i=="rm") found=1}}')
+    SUMMARY="${TARGET:-?} を再帰的に削除"
   fi
 
   # Claude Code PID 特定
@@ -72,6 +116,7 @@ if [ "$RISKY" = true ]; then
     PAYLOAD=$(jq -n \
       --arg cmd "$COMMAND" \
       --arg cat "$CATEGORY" \
+      --arg summary "${SUMMARY:-(分類不可)}" \
       --arg session "$SESSION_ID" \
       --arg context "$CONTEXT" \
       --arg pid "${CLAUDE_PID:-不明}" \
@@ -84,6 +129,7 @@ if [ "$RISKY" = true ]; then
             {"name": "コマンド", "value": ("```\n" + $cmd + "\n```"), "inline": false},
             {"name": "カテゴリ", "value": $cat, "inline": true},
             {"name": "PID", "value": $pid, "inline": true},
+            {"name": "補足", "value": $summary, "inline": false},
             {"name": "セッション", "value": $session, "inline": false},
             {"name": "作業内容", "value": $context, "inline": false}
           ]
