@@ -22,6 +22,7 @@ import { checkModelListFreshness } from './chat-model.js'
 // コマンドのインポート
 import * as issueCmd from './commands/issue.js'
 import * as statusCmd from './commands/status.js'
+import * as stateCmd from './commands/state.js'
 import * as queueCmd from './commands/queue.js'
 import * as runCmd from './commands/run.js'
 import * as cronCmd from './commands/cron.js'
@@ -29,6 +30,7 @@ import * as usageCmd from './commands/usage.js'
 import * as modelCmd from './commands/model.js'
 import * as askCmd from './commands/ask.js'
 import * as sessionCmd from './commands/session.js'
+import * as strategyReportCmd from './commands/strategy-report.js'
 
 const log = createLogger('bot')
 
@@ -39,7 +41,7 @@ interface Command {
 }
 
 const commands = new Collection<string, Command>()
-const commandList: Command[] = [issueCmd, statusCmd, queueCmd, runCmd, cronCmd, usageCmd, modelCmd, askCmd, sessionCmd]
+const commandList: Command[] = [issueCmd, statusCmd, stateCmd, queueCmd, runCmd, cronCmd, usageCmd, modelCmd, askCmd, sessionCmd, strategyReportCmd]
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd)
