@@ -84,8 +84,10 @@ const BASE_SNAPSHOT: ShogunSnapshot = {
 // buildShogunSystemPrompt ルーティングカバレッジ
 // ---------------------------------------------------------------------------
 
+const TEST_GUILD_ID = 'guild-test-123'
+
 describe('buildShogunSystemPrompt routing coverage', () => {
-  const prompt = buildShogunSystemPrompt(BASE_SNAPSHOT, '')
+  const prompt = buildShogunSystemPrompt(BASE_SNAPSHOT, '', TEST_GUILD_ID)
 
   // ── 基本構造 ─────────────────────────────────────────────
 
@@ -98,7 +100,7 @@ describe('buildShogunSystemPrompt routing coverage', () => {
     expect(prompt).toContain('ポーリング')
   })
 
-  // ── issue_create / issue_implement / full_pipeline ───────
+  // ── issue_create ─────────────────────────────────────────
 
   it('[issue_create] gh issue create ルートが含まれる', () => {
     expect(prompt).toContain('gh issue create')
@@ -111,6 +113,32 @@ describe('buildShogunSystemPrompt routing coverage', () => {
 
   it('[issue_create] ユーザーへの報告指示が含まれる', () => {
     expect(prompt).toContain('Issue #N を作成しキューに追加しました')
+  })
+
+  // ── issue_implement（既存Issue番号あり） ──────────────────
+
+  it('[issue_implement] Issue番号ありの場合はキュー登録のみ（Issue作成不要）の指示が含まれる', () => {
+    expect(prompt).toContain('Issue作成は不要')
+    expect(prompt).toContain('キュー登録だけ行う')
+  })
+
+  it('[issue_implement] 既存Issueへの報告文言が含まれる', () => {
+    expect(prompt).toContain('Issue #N をキューに追加しました')
+  })
+
+  // ── bug_immediate（緊急処理） ─────────────────────────────
+
+  it('[bug_immediate] 緊急処理セクションが含まれる', () => {
+    expect(prompt).toContain('緊急処理')
+    expect(prompt).toContain('至急')
+  })
+
+  it('[bug_immediate] process-immediate.ts CLI ルートが含まれる', () => {
+    expect(prompt).toContain('npx tsx scripts/process-immediate.ts')
+  })
+
+  it('[bug_immediate] ロック中のフォールバック説明が含まれる', () => {
+    expect(prompt).toContain('高優先度キュー')
   })
 
   // ── status_check ─────────────────────────────────────────
@@ -200,6 +228,16 @@ describe('buildShogunSystemPrompt routing coverage', () => {
     expect(prompt).toContain('システム状態')
   })
 
+  // ── guildId 埋め込み ──────────────────────────────────────
+
+  it('MEMORY.md 書き込みコマンドに実際の guildId が含まれる', () => {
+    expect(prompt).toContain(`data/memory/${TEST_GUILD_ID}/MEMORY.md`)
+  })
+
+  it('MEMORY.md 書き込みに printf が使われる（echo より安全）', () => {
+    expect(prompt).toContain("printf '%s\\n'")
+  })
+
   // ── メモリコンテキスト ───────────────────────────────────
 
   it('メモリコンテキストが空の場合は「ユーザーコンテキスト」セクションを含まない', () => {
@@ -207,7 +245,7 @@ describe('buildShogunSystemPrompt routing coverage', () => {
   })
 
   it('メモリコンテキストがある場合は「ユーザーコンテキスト」セクションを含む', () => {
-    const p = buildShogunSystemPrompt(BASE_SNAPSHOT, 'TypeScriptが好き')
+    const p = buildShogunSystemPrompt(BASE_SNAPSHOT, 'TypeScriptが好き', TEST_GUILD_ID)
     expect(p).toContain('ユーザーコンテキスト')
     expect(p).toContain('TypeScriptが好き')
   })
@@ -216,7 +254,7 @@ describe('buildShogunSystemPrompt routing coverage', () => {
 
   it('プロジェクトが空の場合は <repo> フォールバックが使われる', () => {
     const emptySnapshot: ShogunSnapshot = { ...BASE_SNAPSHOT, projects: [] }
-    const p = buildShogunSystemPrompt(emptySnapshot, '')
+    const p = buildShogunSystemPrompt(emptySnapshot, '', TEST_GUILD_ID)
     expect(p).toContain('<repo>')
   })
 })
