@@ -174,10 +174,10 @@ pre:hover .code-copy-btn{opacity:1}
 /* ── ドロワー ── */
 .drawer{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:10;display:none;backdrop-filter:blur(2px)}
 .drawer.open{display:block}
-.drawer-content{position:absolute;bottom:0;left:0;right:0;background:var(--surface);border-radius:14px 14px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));max-height:70vh;overflow-y:auto;border:1px solid var(--border)}
+.drawer-content{position:absolute;bottom:0;left:0;right:0;background:var(--surface);border-radius:14px 14px 0 0;padding:0 16px 16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));max-height:70vh;overflow-y:auto;border:1px solid var(--border)}
 
 /* ドロワータブ */
-.drawer-tabs{display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.drawer-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;padding-top:16px;margin-bottom:12px}
 .drawer-tab{padding:8px 14px;font-size:13px;color:var(--muted);cursor:pointer;border:none;background:none;font-family:var(--font-sans);border-bottom:2px solid transparent;font-weight:500;transition:color .1s}
 .drawer-tab:hover{color:var(--text)}
 .drawer-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -197,8 +197,8 @@ pre:hover .code-copy-btn{opacity:1}
 .session-item.active{border-color:var(--accent-border);background:var(--accent-dim)}
 .session-item .preview{font-size:13px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .session-item .session-meta{display:flex;gap:8px;font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--font-mono)}
-.session-item .delete-session{align-self:flex-end;color:var(--danger);background:none;border:none;font-size:11px;cursor:pointer;padding:2px 6px;font-family:var(--font-mono);opacity:.6;transition:opacity .1s;display:flex;align-items:center;gap:3px}
-.session-item .delete-session:hover{opacity:1}
+.load-more-btn{width:100%;padding:10px;margin-top:6px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font-sans);transition:all .1s}
+.load-more-btn:hover{background:var(--border);color:var(--text)}
 
 /* ── レスポンシブ ── */
 @media(max-width:480px){
@@ -257,8 +257,7 @@ pre:hover .code-copy-btn{opacity:1}
   <div class="header-logo" id="headerLogo"></div>
   <div class="header-spacer"></div>
   <button class="header-btn" id="planToggle" onclick="cyclePermissionMode()" title="Permission Mode"></button>
-  <button class="header-btn" id="historyBtn" onclick="openDrawer('sessions')" title="History"></button>
-  <button class="header-btn" id="projectsBtn" onclick="openDrawer('projects')" title="Projects"></button>
+  <button class="header-btn" id="menuBtn" onclick="openDrawer()" title="Menu"></button>
 </div>
 <div class="plan-banner" id="planBanner"></div>
 <div class="compact-banner" id="compactBanner"></div>
@@ -297,14 +296,15 @@ pre:hover .code-copy-btn{opacity:1}
 <div class="drawer" id="drawer" onclick="closeDrawer()">
   <div class="drawer-content" onclick="event.stopPropagation()">
     <div class="drawer-tabs">
-      <button class="drawer-tab active" data-tab="projects" onclick="switchDrawerTab('projects')">Projects</button>
-      <button class="drawer-tab" data-tab="sessions" onclick="switchDrawerTab('sessions')">Sessions</button>
+      <button class="drawer-tab active" data-tab="sessions" onclick="switchDrawerTab('sessions')">Sessions</button>
+      <button class="drawer-tab" data-tab="projects" onclick="switchDrawerTab('projects')">Projects</button>
     </div>
-    <div id="projectsTab" class="drawer-tab-content active">
-      <div id="projectList"></div>
-    </div>
-    <div id="sessionsTab" class="drawer-tab-content">
+    <div id="sessionsTab" class="drawer-tab-content active">
+      <div id="currentProjectLabel" style="font-size:12px;color:var(--muted);padding:0 0 8px;font-family:var(--font-mono)"></div>
       <div id="sessionList"></div>
+    </div>
+    <div id="projectsTab" class="drawer-tab-content">
+      <div id="projectList"></div>
     </div>
   </div>
 </div>
@@ -346,6 +346,7 @@ const ICONS = {
   'help-circle': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   'edit-3':      '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   'download':    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  'menu':        '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
 }
 
 function ic(name, size) {
@@ -363,8 +364,7 @@ const TOOL_ICON_MAP = {
 // --- ヘッダー等にアイコンを注入 ---
 document.getElementById('headerLogo').innerHTML = ic('terminal', 18) + '<span id="title">claude-crew</span>'
 document.getElementById('planToggle').innerHTML = ic('shield', 14) + '<span class="btn-label"> Default</span>'
-document.getElementById('historyBtn').innerHTML = ic('clock', 14) + '<span class="btn-label"> History</span>'
-document.getElementById('projectsBtn').innerHTML = ic('folder', 14)
+document.getElementById('menuBtn').innerHTML = ic('menu', 14)
 document.getElementById('tabAddBtn').innerHTML = ic('plus', 14)
 document.getElementById('cmdBtn').innerHTML = ic('slash', 14)
 document.getElementById('filesBtn').innerHTML = ic('upload', 14)
@@ -386,6 +386,132 @@ let activeTabId = null
 const tabs = new Map()
 
 function genTabId() { return 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) }
+
+// --- セッション永続化 (localStorage) --- Project別にタブ状態を保持
+const STORAGE_KEY = 'claude-crew-tabs'
+
+function saveTabs() {
+  try {
+    // 全体データを読み込み
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const store = raw ? JSON.parse(raw) : {}
+    if (!store.projects) store.projects = {}
+
+    store.currentProject = currentProject
+    store.permissionMode = permissionMode
+
+    // 現在のプロジェクトのタブを保存
+    if (currentProject) {
+      const projTabs = []
+      tabs.forEach((tab, tabId) => {
+        projTabs.push({ tabId, sessionId: tab.sessionId, label: tab.label })
+      })
+      store.projects[currentProject] = { activeTabId, tabs: projTabs }
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+  } catch (e) { console.warn('Failed to save tabs:', e) }
+}
+
+/** 指定プロジェクトのタブをDOMに復元する */
+function restoreProjectTabs(projectPath) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return false
+    const store = JSON.parse(raw)
+    const projData = store.projects?.[projectPath]
+    if (!projData?.tabs?.length) return false
+
+    projData.tabs.forEach(saved => {
+      const messagesEl = document.createElement('div')
+      messagesEl.className = 'messages'
+      messagesEl.id = 'msgs-' + saved.tabId
+      sessionsContainer.appendChild(messagesEl)
+
+      tabs.set(saved.tabId, {
+        sessionId: saved.sessionId,
+        streamId: null,
+        sending: false,
+        messagesEl,
+        fullTexts: new WeakMap(),
+        label: saved.label || 'New Chat',
+      })
+
+      if (saved.sessionId) {
+        addMessage(saved.tabId, 'assistant', `<span style="color:var(--muted);font-size:12px">Session restored: ${esc(saved.label)}</span>`)
+      }
+    })
+
+    const targetTab = projData.activeTabId && tabs.has(projData.activeTabId) ? projData.activeTabId : tabs.keys().next().value
+    activeTabId = targetTab
+    tabs.forEach((t, id) => {
+      t.messagesEl.classList.toggle('active', id === targetTab)
+    })
+    renderTabs()
+    return true
+  } catch (e) {
+    console.warn('Failed to restore project tabs:', e)
+    return false
+  }
+}
+
+function restoreTabs() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return false
+    const store = JSON.parse(raw)
+
+    // プロジェクト復元
+    if (store.currentProject) currentProject = store.currentProject
+
+    // Permission Mode復元
+    if (store.permissionMode && typeof PERM_MODES !== 'undefined' && PERM_MODES[store.permissionMode]) {
+      // setPermissionModeはタブ復元後に呼ぶ
+    }
+
+    // 現在プロジェクトのタブ復元
+    if (!currentProject) return false
+    const restored = restoreProjectTabs(currentProject)
+
+    // Permission Mode復元（タブ復元後に実行）
+    if (store.permissionMode && typeof PERM_MODES !== 'undefined' && PERM_MODES[store.permissionMode]) {
+      setPermissionMode(store.permissionMode)
+    }
+
+    return restored
+  } catch (e) {
+    console.warn('Failed to restore tabs:', e)
+    return false
+  }
+}
+
+/** Project切替: 現在タブを退避→新Projectのタブを復元 */
+function switchProjectTabs(newProjectPath) {
+  // 現在のタブを保存
+  saveTabs()
+
+  // 既存タブのDOMを全削除
+  tabs.forEach((tab) => {
+    if (tab.sending && tab.streamId) {
+      fetch('/api/chat/abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ streamId: tab.streamId }),
+      }).catch(() => {})
+    }
+    tab.messagesEl.remove()
+  })
+  tabs.clear()
+  activeTabId = null
+
+  // 新プロジェクトのタブを復元
+  currentProject = newProjectPath
+  const restored = restoreProjectTabs(newProjectPath)
+  if (!restored) {
+    createNewTab()
+  }
+  saveTabs()
+}
 
 // --- marked カスタムレンダラー ---
 const renderer = new marked.Renderer()
@@ -435,6 +561,7 @@ function cyclePermissionMode() {
 }
 function setPermissionMode(mode) {
   permissionMode = mode
+  saveTabs()
   const cfg = PERM_MODES[mode]
   const btn = document.getElementById('planToggle')
   const banner = document.getElementById('planBanner')
@@ -555,6 +682,7 @@ function renameCurrentTab() {
   if (name && name.trim()) {
     tab.label = name.trim()
     renderTabs()
+    saveTabs()
   }
 }
 
@@ -613,6 +741,7 @@ function clearCurrentTab() {
   tab.sessionId = null
   tab.label = 'New Chat'
   renderTabs()
+  saveTabs()
 }
 
 // --- File Upload ---
@@ -700,6 +829,7 @@ function createNewTab(label) {
 
   renderTabs()
   switchTab(tabId)
+  saveTabs()
   return tabId
 }
 
@@ -713,6 +843,7 @@ function switchTab(tabId) {
   const tab = tabs.get(tabId)
   updateStreamingUI(tab.sending)
   inputEl.focus()
+  saveTabs()
 }
 
 function closeTab(tabId) {
@@ -722,8 +853,7 @@ function closeTab(tabId) {
     fetch('/api/chat/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ streamId: tab.streamId }),
+            body: JSON.stringify({ streamId: tab.streamId }),
     }).catch(() => {})
   }
   tab.messagesEl.remove()
@@ -738,6 +868,7 @@ function closeTab(tabId) {
   } else {
     renderTabs()
   }
+  saveTabs()
 }
 
 function renderTabs() {
@@ -763,6 +894,7 @@ function updateTabLabel(tabId, label) {
   if (tab) {
     tab.label = label.slice(0, 30) || 'New Chat'
     renderTabs()
+    saveTabs()
   }
 }
 
@@ -779,22 +911,53 @@ function abortCurrentTab() {
   fetch('/api/chat/abort', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ streamId: tab.streamId }),
+        body: JSON.stringify({ streamId: tab.streamId }),
   }).catch(e => console.error('Abort failed:', e))
 }
 
 // --- 初期化 ---
+let cachedProjects = []
+
 async function init() {
+  // localStorageからタブ・プロジェクト・Permission Modeを復元
+  const restored = restoreTabs()
+
   try {
-    const res = await fetch('/api/projects', { credentials: 'include' })
-    const projects = await res.json()
-    renderProjectList(projects)
-    if (!currentProject && projects.length > 0) selectProject(projects[0])
+    const res = await fetch('/api/projects')
+    cachedProjects = await res.json()
+    renderProjectList(cachedProjects)
+    // 復元済みプロジェクトがプロジェクト一覧に存在するか確認
+    if (currentProject) {
+      const found = cachedProjects.find(p => p.localPath === currentProject)
+      if (found) {
+        document.getElementById('title').textContent = found.slug
+      } else {
+        currentProject = null
+      }
+    }
+    if (!currentProject && cachedProjects.length > 0) selectProject(cachedProjects[0])
   } catch (e) {
     console.error('Failed to load projects:', e)
   }
-  createNewTab()
+
+  if (!restored) createNewTab()
+}
+
+function getProjectTabInfo(projectPath) {
+  // 現在のプロジェクトならメモリから取得
+  if (projectPath === currentProject) {
+    let sending = 0
+    tabs.forEach(t => { if (t.sending) sending++ })
+    return { count: tabs.size, sending }
+  }
+  // 他のプロジェクトはlocalStorageから取得
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { count: 0, sending: 0 }
+    const store = JSON.parse(raw)
+    const projData = store.projects?.[projectPath]
+    return { count: projData?.tabs?.length || 0, sending: 0 }
+  } catch { return { count: 0, sending: 0 } }
 }
 
 function renderProjectList(projects) {
@@ -803,22 +966,31 @@ function renderProjectList(projects) {
   projects.forEach(p => {
     const el = document.createElement('div')
     el.className = 'project-item' + (currentProject === p.localPath ? ' active' : '')
-    el.innerHTML = `<span class="name">${esc(p.slug)}</span><span class="path">${esc(p.localPath)}</span>`
-    el.onclick = () => { selectProject(p); closeDrawer() }
+    const info = getProjectTabInfo(p.localPath)
+    let badge = ''
+    if (info.sending > 0) {
+      badge = `<span style="margin-left:auto;font-size:11px;color:var(--accent);font-weight:600">${info.sending} running</span>`
+    }
+    el.innerHTML = `<div style="display:flex;align-items:center"><span class="name">${esc(p.slug)}</span>${badge}</div><span class="path">${esc(p.localPath)}</span>`
+    el.onclick = () => { selectProject(p) }
     list.appendChild(el)
   })
 }
 
 function selectProject(p) {
-  currentProject = p.localPath
+  if (currentProject === p.localPath) return // 同じProject
   document.getElementById('title').textContent = p.slug
+  switchProjectTabs(p.localPath)
+  // Projectリスト再レンダリング（active状態 + タブ数バッジ更新）
+  if (cachedProjects.length) renderProjectList(cachedProjects)
 }
 
 // --- ドロワー ---
 function openDrawer(tab) {
   document.getElementById('drawer').classList.add('open')
-  if (tab) switchDrawerTab(tab)
-  if (tab === 'sessions') loadSessions()
+  const target = tab || 'sessions'
+  switchDrawerTab(target)
+  if (target === 'sessions') loadSessions()
 }
 function closeDrawer() { document.getElementById('drawer').classList.remove('open') }
 
@@ -826,45 +998,83 @@ function switchDrawerTab(tab) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab))
   document.getElementById('projectsTab').classList.toggle('active', tab === 'projects')
   document.getElementById('sessionsTab').classList.toggle('active', tab === 'sessions')
+  if (tab === 'sessions') loadSessions()
+  if (tab === 'projects' && cachedProjects.length) renderProjectList(cachedProjects)
 }
 
 // --- セッション履歴 ---
-async function loadSessions() {
+let sessionOffset = 0
+const SESSION_PAGE_SIZE = 20
+
+async function loadSessions(append) {
+  if (!append) sessionOffset = 0
+  // プロジェクトラベル更新
+  const lbl = document.getElementById('currentProjectLabel')
+  if (lbl) lbl.textContent = currentProject ? currentProject.split('/').pop() : ''
   try {
-    const res = await fetch('/api/chat/sessions', { credentials: 'include' })
-    const sessions = await res.json()
-    renderSessionList(sessions)
+    const params = new URLSearchParams()
+    if (currentProject) params.set('project', currentProject)
+    params.set('offset', String(sessionOffset))
+    params.set('limit', String(SESSION_PAGE_SIZE))
+    const res = await fetch('/api/chat/sessions?' + params.toString())
+    const data = await res.json()
+    renderSessionList(data.items, data.total, append)
   } catch (e) {
     console.error('Failed to load sessions:', e)
   }
 }
 
-function renderSessionList(list) {
+function timeAgo(ts) {
+  const sec = Math.floor((Date.now() - ts) / 1000)
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  return `${day}d ago`
+}
+
+function renderSessionList(list, total, append) {
   const container = document.getElementById('sessionList')
-  if (list.length === 0) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No sessions yet</div>'
-    return
+  if (!append) {
+    if (list.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No sessions yet</div>'
+      return
+    }
+    container.innerHTML = ''
   }
-  container.innerHTML = ''
+
+  // 既存の「さらに読み込む」ボタンを削除
+  const oldBtn = container.querySelector('.load-more-btn')
+  if (oldBtn) oldBtn.remove()
+
   list.forEach(s => {
     const el = document.createElement('div')
-    // 既にタブで開いているか判定
     const openTabId = findTabBySessionId(s.sessionId)
     el.className = 'session-item' + (openTabId ? ' active' : '')
     el.setAttribute('data-testid', 'session-item')
-    const timeStr = new Date(s.lastUsed).toLocaleString('ja-JP', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+    const timeStr = timeAgo(s.lastUsed)
     const statusLabel = openTabId ? '<span style="color:var(--accent);font-size:10px">OPEN</span>' : ''
     el.innerHTML = `
       <span class="preview">${esc(s.messagePreview || s.sessionId)} ${statusLabel}</span>
       <div class="session-meta">
-        <span>${esc(s.model || '')}</span>
         <span>${timeStr}</span>
       </div>
-      <button class="delete-session" onclick="event.stopPropagation();deleteSession('${esc(s.id || s.sessionId.slice(0,12))}')">${ic('trash-2', 11)} delete</button>
     `
     el.onclick = () => { resumeSession(s); closeDrawer() }
     container.appendChild(el)
   })
+
+  sessionOffset += list.length
+  // まだ続きがあれば「さらに読み込む」ボタンを追加
+  if (sessionOffset < total) {
+    const btn = document.createElement('button')
+    btn.className = 'load-more-btn'
+    btn.textContent = `Load more (${sessionOffset}/${total})`
+    btn.onclick = (e) => { e.stopPropagation(); loadSessions(true) }
+    container.appendChild(btn)
+  }
 }
 
 function findTabBySessionId(sessionId) {
@@ -881,21 +1091,19 @@ function resumeSession(s) {
     switchTab(existingTabId)
     return
   }
-  // 新しいタブで開く
-  const tabId = createNewTab(s.messagePreview || s.sessionId.slice(0, 12))
-  const tab = tabs.get(tabId)
-  tab.sessionId = s.sessionId
-  addMessage(tabId, 'user', `(Resumed: ${s.messagePreview || s.sessionId.slice(0,12)})`)
-}
-
-async function deleteSession(id) {
-  try {
-    await fetch(`/api/chat/sessions/${id}`, { method: 'DELETE', credentials: 'include' })
-    loadSessions()
-  } catch (e) {
-    console.error('Failed to delete session:', e)
+  // 現在のタブで開く
+  const tab = tabs.get(activeTabId)
+  if (tab) {
+    tab.sessionId = s.sessionId
+    tab.label = (s.messagePreview || s.sessionId.slice(0, 12)).slice(0, 30)
+    tab.messagesEl.innerHTML = ''
+    tab.fullTexts = new WeakMap()
+    addMessage(activeTabId, 'assistant', `<span style="color:var(--muted);font-size:12px">Session restored: ${esc(tab.label)}</span>`)
+    renderTabs()
+    saveTabs()
   }
 }
+
 
 // --- メッセージ送信 ---
 async function sendMessage() {
@@ -928,8 +1136,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
+            body: JSON.stringify({
         message: text,
         project: currentProject,
         sessionId: tab.sessionId,
@@ -1030,7 +1237,7 @@ function handleSSE(tabId, event, data, content, msgEl) {
   if (event === 'session') {
     try {
       const s = JSON.parse(data)
-      if (s.sessionId) tab.sessionId = s.sessionId
+      if (s.sessionId) { tab.sessionId = s.sessionId; saveTabs() }
       if (s.streamId) tab.streamId = s.streamId
     } catch {}
   }
@@ -1038,7 +1245,7 @@ function handleSSE(tabId, event, data, content, msgEl) {
   if (event === 'result') {
     try {
       const r = JSON.parse(data)
-      if (r.sessionId) tab.sessionId = r.sessionId
+      if (r.sessionId) { tab.sessionId = r.sessionId; saveTabs() }
       if (r.text && !tab.fullTexts.has(content)) {
         content.innerHTML = marked.parse(r.text)
       }

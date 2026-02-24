@@ -1,12 +1,12 @@
 /**
- * Web サーバー — Hono + Basic Auth + Tailscaleバインド
+ * Web サーバー — Hono + Tailscaleバインド
  *
  * Tailscaleインターフェースのみにバインドし、ローカルポートは公開しない。
+ * 認証はTailscaleのACLに委譲する。
  * 起動: npx tsx src/web/server.ts
  */
 import 'dotenv/config'
 import { Hono } from 'hono'
-import { basicAuth } from 'hono/basic-auth'
 import { cors } from 'hono/cors'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { serve } from '@hono/node-server'
@@ -20,13 +20,6 @@ const log = createLogger('web:server')
 // --- 設定 ---
 const PORT = Number(process.env.WEB_PORT || '3100')
 const HOST = process.env.WEB_HOST || '100.116.180.63' // Tailscale IP
-const USERNAME = process.env.WEB_USERNAME || 'admin'
-const PASSWORD = process.env.WEB_PASSWORD || ''
-
-if (!PASSWORD) {
-  log.error('WEB_PASSWORD is required. Set it in .env')
-  process.exit(1)
-}
 
 // --- プロジェクト一覧（projects.json から読み込み） ---
 interface ProjectEntry {
@@ -50,9 +43,6 @@ const app = new Hono()
 
 // CORS（Tailscale内のみだが念のため）
 app.use('*', cors())
-
-// Basic Auth
-app.use('*', basicAuth({ username: USERNAME, password: PASSWORD }))
 
 // 静的ファイル配信
 app.use('/static/*', serveStatic({ root: resolve(process.cwd(), 'src/web/public'), rewriteRequestPath: (path) => path.replace('/static', '') }))

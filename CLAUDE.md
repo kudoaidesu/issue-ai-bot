@@ -10,7 +10,7 @@
 | GitHub | `gh` CLI | `gh auth login`（OAuth/ブラウザ認証） |
 | Claude | `claude` CLI / Agent SDK | `claude setup-token`（サブスク認証） |
 
-`.env` にはWeb UI認証情報（`WEB_PASSWORD`）のみ管理する。
+`.env` は現在使用していない。認証はTailscaleのACLに委譲する。
 
 ## 絶対厳守ルール
 
@@ -31,7 +31,7 @@
 ## 技術スタック
 
 - **ランタイム**: Node.js + TypeScript
-- **Web UI**: Hono（SSE + Basic Auth、Tailscale経由）
+- **Web UI**: Hono（SSE、Tailscale経由）
 - **GitHub連携**: `gh` CLI（トークン不要、`gh auth login` の認証セッションを使用）
 - **LLM**: Claude Code CLI / Agent SDK — 用途ベースで使い分け
 - **Cronジョブ**: node-cron
@@ -95,7 +95,7 @@ brew install gh
 gh auth login
 
 # Web UI認証情報は .env に記載
-# WEB_PASSWORD=xxx
+# 認証はTailscaleのACLに委譲（.envは不要）
 ```
 
 ## ディレクトリ構造
@@ -123,7 +123,7 @@ src/
 │   ├── scheduler.ts   # Cronスケジューラ（バッチ制限）
 │   └── rate-limiter.ts # 同時実行ガード
 ├── web/               # Web UI（スマホ操作用）
-│   ├── server.ts      # Hono サーバー（Basic Auth + Tailscale）
+│   ├── server.ts      # Hono サーバー（Tailscaleバインド）
 │   ├── danger-detect.ts # 危険コマンド事後報告
 │   ├── routes/
 │   │   └── chat.ts    # Agent SDK + SSEストリーミング
@@ -153,7 +153,7 @@ projects.json          # プロジェクト登録（slug, repo, localPath）
 ```
 [スマホ/別PC]                     [MacBook 2018 サーバー]
     │                                     │
-    └── Tailscale VPN ───────── Web UI (Hono + Basic Auth)
+    └── Tailscale VPN ───────── Web UI (Hono)
                                           │
                                   slug → projects.json 逆引き
                                           │

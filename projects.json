@@ -3,5 +3,10 @@
     "slug": "claude-crew",
     "repo": "kudoaidesu/claude-crew",
     "localPath": "/Users/ai_server/work/claude-crew"
+  },
+  {
+    "slug": "issue-ai-bot",
+    "repo": "kudoaidesu/issue-ai-bot",
+    "localPath": "/Users/ai_server/work/issue-ai-bot"
   }
 ]

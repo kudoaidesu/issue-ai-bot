@@ -6,12 +6,16 @@
  */
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { homedir } from 'node:os'
 import { createChatStream, abortStream } from '../services/chat-service.js'
 import { createLogger } from '../../utils/logger.js'
 
 const log = createLogger('web:chat')
 
-// アクティブセッション管理（インメモリ）
+// アクティブセッション管理（ファイル永続化）
 export interface SessionEntry {
   sessionId: string
   project: string
@@ -20,7 +24,36 @@ export interface SessionEntry {
   messagePreview: string
 }
 
+// プロジェクトルートの data/ に保存
+const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+const SESSIONS_FILE = join(projectRoot, 'data', 'sessions.json')
+
 const sessions = new Map<string, SessionEntry>()
+
+// 起動時にファイルから復元
+function loadSessions(): void {
+  try {
+    const raw = readFileSync(SESSIONS_FILE, 'utf-8')
+    const entries: Array<[string, SessionEntry]> = JSON.parse(raw)
+    for (const [key, val] of entries) {
+      sessions.set(key, val)
+    }
+    log.info(`Loaded ${sessions.size} sessions from disk`)
+  } catch {
+    // ファイルが無い場合は空で開始
+  }
+}
+
+function persistSessions(): void {
+  try {
+    mkdirSync(dirname(SESSIONS_FILE), { recursive: true })
+    writeFileSync(SESSIONS_FILE, JSON.stringify(Array.from(sessions.entries()), null, 2))
+  } catch (e) {
+    log.warn(`Failed to persist sessions: ${e}`)
+  }
+}
+
+loadSessions()
 
 // streamId → sessionId マッピング（中断用）
 const streamToSession = new Map<string, string>()
@@ -29,6 +62,105 @@ export function getSessions(): SessionEntry[] {
   return Array.from(sessions.entries())
     .map(([key, val]) => ({ ...val, id: key }))
     .sort((a, b) => b.lastUsed - a.lastUsed)
+}
+
+/**
+ * ~/.claude/projects/ からAgent SDKのセッションファイルを直接スキャン
+ * cwdパスをハッシュ化したディレクトリ名でプロジェクトを特定
+ */
+function cwdToProjectDir(cwd: string): string {
+  // Agent SDKはパスの / と _ を - に変換してディレクトリ名にする
+  return cwd.replace(/[/_]/g, '-')
+}
+
+// SDKセッションスキャンキャッシュ（5秒TTL）
+let sdkCache: { cwd: string; data: SessionEntry[]; ts: number } | null = null
+const SDK_CACHE_TTL = 5000
+
+function scanSdkSessions(cwd: string): SessionEntry[] {
+  // キャッシュヒット
+  if (sdkCache && sdkCache.cwd === cwd && Date.now() - sdkCache.ts < SDK_CACHE_TTL) {
+    return sdkCache.data
+  }
+
+  const claudeDir = join(homedir(), '.claude', 'projects', cwdToProjectDir(cwd))
+  const results: SessionEntry[] = []
+
+  try {
+    const files = readdirSync(claudeDir).filter(f => f.endsWith('.jsonl'))
+
+    // stat情報を取得して最新50件に絞る
+    const fileStats = files.map(f => {
+      try {
+        const s = statSync(join(claudeDir, f))
+        return { file: f, mtime: s.mtimeMs }
+      } catch { return null }
+    }).filter((x): x is { file: string; mtime: number } => x !== null)
+    fileStats.sort((a, b) => b.mtime - a.mtime)
+
+    for (const { file, mtime } of fileStats) {
+      const filePath = join(claudeDir, file)
+      const sessionId = file.replace('.jsonl', '')
+
+      try {
+        // 先頭4KBだけ読んでuserメッセージを探す（大きいファイルでも高速）
+        const buf = Buffer.alloc(4096)
+        const fd = openSync(filePath, 'r')
+        const bytesRead = readSync(fd, buf, 0, 4096, 0)
+        closeSync(fd)
+        const head = buf.toString('utf-8', 0, bytesRead)
+        let preview = ''
+        for (const line of head.split('\n')) {
+          if (!line.trim()) continue
+          try {
+            const obj = JSON.parse(line)
+            if (obj.type === 'user' && obj.message?.content) {
+              const textContent = obj.message.content.find(
+                (c: { type: string; text?: string }) => c.type === 'text'
+              )
+              if (textContent?.text) {
+                preview = textContent.text.slice(0, 100)
+                break
+              }
+            }
+          } catch { /* skip malformed lines */ }
+        }
+
+        results.push({
+          sessionId,
+          project: cwd,
+          model: '',
+          lastUsed: mtime,
+          messagePreview: preview || sessionId.slice(0, 12),
+        })
+      } catch { /* skip unreadable files */ }
+    }
+  } catch { /* directory doesn't exist */ }
+
+  results.sort((a, b) => b.lastUsed - a.lastUsed)
+  sdkCache = { cwd, data: results, ts: Date.now() }
+  return results
+}
+
+/**
+ * インメモリsessions + SDKファイルスキャンをマージ
+ * インメモリに無いセッションはSDKから補完
+ */
+function getMergedSessions(cwd?: string): SessionEntry[] {
+  const memSessions = getSessions()
+  if (!cwd) return memSessions
+
+  const sdkSessions = scanSdkSessions(cwd)
+  const existingIds = new Set(memSessions.map(s => s.sessionId))
+
+  // SDKにしかないセッションを追加
+  for (const sdk of sdkSessions) {
+    if (!existingIds.has(sdk.sessionId)) {
+      memSessions.push({ ...sdk, id: sdk.sessionId.slice(0, 12) } as SessionEntry & { id: string })
+    }
+  }
+
+  return memSessions.sort((a, b) => b.lastUsed - a.lastUsed)
 }
 
 export const chatRoutes = new Hono()
@@ -131,7 +263,7 @@ chatRoutes.post('/', async (c) => {
         }
       }
 
-      // セッション保存
+      // セッション保存（ファイル永続化）
       if (lastSessionId) {
         const key = lastSessionId.slice(0, 12)
         sessions.set(key, {
@@ -149,6 +281,7 @@ chatRoutes.post('/', async (c) => {
             sessions.delete(oldest[i][0])
           }
         }
+        persistSessions()
       }
       if (currentStreamId) {
         streamToSession.delete(currentStreamId)
@@ -174,14 +307,14 @@ chatRoutes.post('/abort', async (c) => {
   return c.json({ aborted })
 })
 
-// GET /api/chat/sessions — セッション一覧
+// GET /api/chat/sessions — セッション一覧（SDKファイルスキャン付き、ページング対応）
 chatRoutes.get('/sessions', (c) => {
-  return c.json(getSessions())
+  const project = c.req.query('project')
+  const offset = parseInt(c.req.query('offset') || '0', 10)
+  const limit = parseInt(c.req.query('limit') || '20', 10)
+
+  const all = getMergedSessions(project)
+  const page = all.slice(offset, offset + limit)
+  return c.json({ items: page, total: all.length, offset, limit })
 })
 
-// DELETE /api/chat/sessions/:id — セッション削除
-chatRoutes.delete('/sessions/:id', (c) => {
-  const id = c.req.param('id')
-  const deleted = sessions.delete(id)
-  return c.json({ deleted })
-})
