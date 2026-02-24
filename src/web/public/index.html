@@ -35,8 +35,13 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:2;stroke-linecap:ro
 .header-btn:hover{color:var(--text);border-color:var(--border-light);background:var(--surface-hover)}
 .header-btn.active{color:var(--accent);border-color:var(--accent-border)}
 .header-btn svg.ic{font-size:14px}
-.model-select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font-mono);cursor:pointer}
+.model-select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font-mono);cursor:pointer;min-width:0;flex-shrink:1}
 .model-select:focus{outline:none;border-color:var(--accent)}
+.upload-menu{display:none;position:absolute;bottom:100%;left:40px;margin-bottom:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.upload-menu.active{display:flex;flex-direction:column;gap:2px}
+.upload-menu button{display:flex;align-items:center;gap:8px;padding:8px 14px;background:none;border:none;color:var(--text);font-size:13px;font-family:var(--font-mono);cursor:pointer;border-radius:6px;white-space:nowrap}
+.upload-menu button:hover{background:var(--surface-hover)}
+.upload-menu-icon{display:inline-flex;align-items:center}
 
 /* ── セッションタブバー ── */
 .tab-bar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -191,7 +196,7 @@ pre:hover .code-copy-btn{opacity:1}
   .header-logo span{display:none}
   .header-btn{padding:4px 6px;font-size:11px}
   .header-btn .btn-label{display:none}
-  .model-select{max-width:120px;font-size:11px;padding:3px 4px}
+  .model-select{font-size:11px;padding:3px 4px}
   .tab{padding:4px 8px;font-size:11px;max-width:120px}
   .input-area{padding:8px 10px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
   .input-footer{gap:3px;padding:3px 6px 4px}
@@ -200,7 +205,6 @@ pre:hover .code-copy-btn{opacity:1}
 }
 @media(max-width:360px){
   .header-logo svg.ic{font-size:14px}
-  .model-select{max-width:80px}
 }
 
 /* ── Plan Mode バナー ── */
@@ -261,8 +265,12 @@ pre:hover .code-copy-btn{opacity:1}
     <textarea id="input" rows="1" placeholder="Ask Claude anything..." enterkeyhint="send"></textarea>
     <div class="input-footer">
       <button id="cmdBtn" onclick="toggleCmdMenu()" title="Commands (/)"></button>
-      <button id="filesBtn" onclick="triggerFileUpload()" title="Upload file"></button>
-      <input type="file" id="fileInput" multiple accept="text/*,.ts,.tsx,.js,.jsx,.json,.md,.yaml,.yml,.toml,.css,.html,.py,.sh,.sql,.xml,.csv,.log,.env,.gitignore" style="display:none">
+      <button id="filesBtn" onclick="showUploadMenu()" title="Upload file"></button>
+      <input type="file" id="fileInput" multiple style="display:none">
+      <div class="upload-menu" id="uploadMenu">
+        <button onclick="doUpload('file')"><span class="upload-menu-icon" id="umFileIcon"></span> File</button>
+        <button onclick="doUpload('image')"><span class="upload-menu-icon" id="umImageIcon"></span> Image</button>
+      </div>
       <select id="model" class="model-select">
         <option value="default">default (auto)</option>
         <option value="claude-sonnet-4-6" selected>claude-sonnet-4-6</option>
@@ -324,6 +332,7 @@ const ICONS = {
   'link':        '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   'eraser':      '<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
   'upload':      '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  'image':       '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
 }
 
 function ic(name, size) {
@@ -346,6 +355,8 @@ document.getElementById('projectsBtn').innerHTML = ic('folder', 14)
 document.getElementById('tabAddBtn').innerHTML = ic('plus', 14)
 document.getElementById('cmdBtn').innerHTML = ic('slash', 14)
 document.getElementById('filesBtn').innerHTML = ic('upload', 14)
+document.getElementById('umFileIcon').innerHTML = ic('file-text', 14)
+document.getElementById('umImageIcon').innerHTML = ic('image', 14)
 document.getElementById('abort').innerHTML = ic('square', 14)
 document.getElementById('send').innerHTML = ic('send', 14)
 
@@ -462,21 +473,56 @@ function clearCurrentTab() {
 }
 
 // --- File Upload ---
-function triggerFileUpload() {
-  document.getElementById('fileInput').click()
+const uploadMenu = document.getElementById('uploadMenu')
+const fileInput = document.getElementById('fileInput')
+
+function showUploadMenu() {
+  uploadMenu.classList.toggle('active')
 }
-document.getElementById('fileInput').addEventListener('change', async (e) => {
+function doUpload(mode) {
+  uploadMenu.classList.remove('active')
+  if (mode === 'image') {
+    fileInput.accept = 'image/*'
+  } else {
+    fileInput.accept = 'text/*,.ts,.tsx,.js,.jsx,.json,.md,.yaml,.yml,.toml,.css,.html,.py,.sh,.sql,.xml,.csv,.log,.env,.gitignore'
+  }
+  fileInput.click()
+}
+document.addEventListener('click', (e) => {
+  if (!uploadMenu.contains(e.target) && e.target !== document.getElementById('filesBtn') && !document.getElementById('filesBtn').contains(e.target)) {
+    uploadMenu.classList.remove('active')
+  }
+})
+fileInput.addEventListener('change', async (e) => {
   const files = e.target.files
   if (!files || files.length === 0) return
-  const parts = []
-  for (const file of files) {
-    try {
-      const text = await file.text()
-      parts.push(`--- ${file.name} ---\n${text}`)
-    } catch { parts.push(`--- ${file.name} --- (読み込みエラー)`) }
+  const isImage = fileInput.accept.startsWith('image')
+  if (isImage) {
+    const parts = []
+    for (const file of files) {
+      try {
+        const reader = new FileReader()
+        const dataUrl = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        parts.push(`[image: ${file.name}]\n${dataUrl}`)
+      } catch { parts.push(`[image: ${file.name}] (読み込みエラー)`) }
+    }
+    const sep = inputEl.value ? '\n' : ''
+    inputEl.value += sep + parts.join('\n\n')
+  } else {
+    const parts = []
+    for (const file of files) {
+      try {
+        const text = await file.text()
+        parts.push(`--- ${file.name} ---\n${text}`)
+      } catch { parts.push(`--- ${file.name} --- (読み込みエラー)`) }
+    }
+    const sep = inputEl.value ? '\n' : ''
+    inputEl.value += sep + parts.join('\n\n')
   }
-  const sep = inputEl.value ? '\n' : ''
-  inputEl.value += sep + parts.join('\n\n')
   inputEl.style.height = 'auto'
   inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px'
   inputEl.focus()
