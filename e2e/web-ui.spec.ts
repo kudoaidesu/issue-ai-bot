@@ -287,7 +287,7 @@ test.describe('Web UI', () => {
   test.describe('プロジェクト切り替え', () => {
     test('プロジェクトドロワーにプロジェクト一覧が表示される', async ({ page }) => {
       // フォルダボタンを開く
-      await page.locator('.header-btn:has(.icon-folder)').click()
+      await page.locator('#projectsBtn').click()
       await expect(page.locator('#drawer')).toHaveClass(/open/)
 
       // Projects タブをクリック
@@ -301,7 +301,7 @@ test.describe('Web UI', () => {
     })
 
     test('プロジェクトを切り替えるとタイトルが変わる', async ({ page }) => {
-      await page.locator('.header-btn:has(.icon-folder)').click()
+      await page.locator('#projectsBtn').click()
       await page.locator('.drawer-tab[data-tab="projects"]').click()
       await page.locator('.project-item').nth(1).click()
 

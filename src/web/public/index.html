@@ -6,7 +6,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Claude Code</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.min.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -25,36 +24,39 @@
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.6}
 body{display:flex;flex-direction:column;height:100dvh}
+svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none;vertical-align:-.125em;flex-shrink:0}
 
 /* ── ヘッダー ── */
 .header{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
 .header-logo{display:flex;align-items:center;gap:6px;color:var(--accent);font-weight:700;font-size:13px;font-family:var(--font-mono)}
-.header-logo i{font-size:18px}
+.header-logo svg.ic{font-size:18px}
 .header-spacer{flex:1}
 .header-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:12px;font-family:var(--font-mono);cursor:pointer;display:flex;align-items:center;gap:4px;transition:all .15s}
 .header-btn:hover{color:var(--text);border-color:var(--border-light);background:var(--surface-hover)}
 .header-btn.active{color:var(--accent);border-color:var(--accent-border)}
-.header-btn i{font-size:14px}
+.header-btn svg.ic{font-size:14px}
 .model-select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font-mono);cursor:pointer}
 .model-select:focus{outline:none;border-color:var(--accent)}
 
 /* ── セッションタブバー ── */
 .tab-bar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab{display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;font-family:var(--font-mono);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .1s;min-width:0;max-width:180px;flex-shrink:0;position:relative}
+.tab{display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;font-family:var(--font-mono);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .1s;min-width:0;max-width:180px;flex-shrink:0}
 .tab:hover{color:var(--text);background:var(--surface-hover)}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .tab .tab-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tab .tab-streaming{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite;flex-shrink:0}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.tab .tab-close{font-size:12px;color:var(--muted);cursor:pointer;padding:0 2px;border-radius:3px;transition:all .1s;flex-shrink:0;display:flex;align-items:center}
+.tab .tab-close{color:var(--muted);cursor:pointer;padding:0 2px;border-radius:3px;transition:all .1s;flex-shrink:0;display:flex;align-items:center}
 .tab .tab-close:hover{color:var(--danger);background:var(--danger-bg)}
+.tab .tab-close svg.ic{font-size:11px}
 .tab-add{display:flex;align-items:center;justify-content:center;padding:6px 10px;color:var(--muted);cursor:pointer;transition:all .1s;flex-shrink:0}
 .tab-add:hover{color:var(--accent);background:var(--surface-hover)}
-.tab-add i{font-size:14px}
+.tab-add svg.ic{font-size:14px}
 
-/* ── メッセージエリア ── */
-.messages{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:16px;display:none}
+/* ── メッセージコンテナ ── */
+#sessionsContainer{flex:1;overflow:hidden;position:relative;min-height:0}
+.messages{position:absolute;inset:0;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:16px}
 .messages.active{display:flex}
 
 /* ── ユーザーメッセージ ── */
@@ -103,13 +105,16 @@ pre:hover .code-copy-btn{opacity:1}
 .tool-detail{margin:4px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-family:var(--font-mono);font-size:12px;background:var(--surface)}
 .tool-detail-header{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;user-select:none;transition:background .1s}
 .tool-detail-header:hover{background:var(--surface-hover)}
-.tool-detail-header .tool-chevron{font-size:9px;color:var(--muted);transition:transform .15s;width:12px;text-align:center}
+.tool-detail-header .tool-chevron{color:var(--muted);transition:transform .15s;width:12px;display:flex;align-items:center}
+.tool-detail-header .tool-chevron svg.ic{font-size:10px}
 .tool-detail-header .tool-chevron.open{transform:rotate(90deg)}
 .tool-detail-header .tool-icon-label{display:flex;align-items:center;gap:6px}
-.tool-detail-header .tool-icon{font-size:13px;color:var(--muted);width:16px;text-align:center}
+.tool-detail-header .tool-icon{color:var(--muted);display:flex;align-items:center}
+.tool-detail-header .tool-icon svg.ic{font-size:13px}
 .tool-detail-header .tool-name{color:var(--accent);font-weight:600;font-size:12px}
 .tool-detail-header .tool-file{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
-.tool-detail-header .tool-status{font-size:10px;color:var(--success)}
+.tool-detail-header .tool-status{color:var(--success);display:flex;align-items:center}
+.tool-detail-header .tool-status svg.ic{font-size:12px}
 .tool-detail-body{display:none;padding:10px 12px;background:var(--bg);border-top:1px solid var(--border);max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--text);line-height:1.4;font-size:12px}
 .tool-detail-body.open{display:block}
 
@@ -121,13 +126,13 @@ pre:hover .code-copy-btn{opacity:1}
 
 /* ── 警告バッジ ── */
 .warning-badge{display:flex;align-items:center;gap:8px;background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,226,175,.2);border-radius:8px;padding:8px 12px;font-size:12px;margin:4px 0;font-family:var(--font-mono)}
-.warning-badge i{font-size:14px}
+.warning-badge svg.ic{font-size:14px;flex-shrink:0}
 
 /* ── コスト表示 ── */
 .meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:12px;font-family:var(--font-mono)}
 
 /* ── 入力エリア ── */
-.input-area{border-top:1px solid var(--border);background:var(--surface);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));flex-shrink:0}
+.input-area{border-top:1px solid var(--border);background:var(--surface);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));flex-shrink:0;margin-top:auto}
 .input-box{border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden;transition:border-color .15s}
 .input-box:focus-within{border-color:var(--accent-border)}
 .input-box textarea{width:100%;background:transparent;color:var(--text);border:none;padding:10px 14px;font-size:14px;font-family:var(--font-sans);resize:none;min-height:40px;max-height:150px;line-height:1.4}
@@ -185,10 +190,7 @@ pre:hover .code-copy-btn{opacity:1}
 <body>
 
 <div class="header">
-  <div class="header-logo">
-    <i class="icon-terminal"></i>
-    <span id="title">claude-crew</span>
-  </div>
+  <div class="header-logo" id="headerLogo"></div>
   <div class="header-spacer"></div>
   <select id="model" class="model-select">
     <option value="default">default (auto)</option>
@@ -199,12 +201,12 @@ pre:hover .code-copy-btn{opacity:1}
     <option value="opus">opus (alias)</option>
     <option value="haiku">haiku (alias)</option>
   </select>
-  <button class="header-btn" id="historyBtn" onclick="openDrawer('sessions')" title="History"><i class="icon-clock"></i> History</button>
-  <button class="header-btn" onclick="openDrawer('projects')" title="Projects"><i class="icon-folder"></i></button>
+  <button class="header-btn" id="historyBtn" onclick="openDrawer('sessions')" title="History"></button>
+  <button class="header-btn" id="projectsBtn" onclick="openDrawer('projects')" title="Projects"></button>
 </div>
 
 <div class="tab-bar" id="tabBar">
-  <div class="tab-add" onclick="createNewTab()" title="New Chat"><i class="icon-plus"></i></div>
+  <div class="tab-add" id="tabAddBtn" onclick="createNewTab()" title="New Chat"></div>
 </div>
 
 <div id="sessionsContainer"></div>
@@ -214,8 +216,8 @@ pre:hover .code-copy-btn{opacity:1}
     <textarea id="input" rows="1" placeholder="Ask Claude anything..." enterkeyhint="send"></textarea>
     <div class="input-footer">
       <span class="model-indicator" id="modelIndicator">claude-sonnet-4-6</span>
-      <button class="abort-btn" id="abort" onclick="abortCurrentTab()" title="Stop"><i class="icon-square"></i></button>
-      <button class="send-btn" id="send" onclick="sendMessage()" title="Send (Enter)"><i class="icon-send"></i></button>
+      <button class="abort-btn" id="abort" onclick="abortCurrentTab()" title="Stop"></button>
+      <button class="send-btn" id="send" onclick="sendMessage()" title="Send (Enter)"></button>
     </div>
   </div>
 </div>
@@ -237,12 +239,47 @@ pre:hover .code-copy-btn{opacity:1}
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script>
-// --- ツールアイコンマップ (Lucide) ---
-const TOOL_ICONS = {
-  Read: 'icon-file-text', Write: 'icon-file-pen', Edit: 'icon-file-pen', Bash: 'icon-terminal',
-  Glob: 'icon-search', Grep: 'icon-search', WebFetch: 'icon-globe', WebSearch: 'icon-globe',
-  Task: 'icon-bot', TodoWrite: 'icon-list-checks', NotebookEdit: 'icon-notebook-pen',
+// ── Lucide インラインSVGアイコン ──
+const ICONS = {
+  terminal:      '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+  clock:         '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  folder:        '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  plus:          '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  x:             '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  square:        '<rect width="18" height="18" x="3" y="3" rx="2"/>',
+  'send':        '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
+  'chevron-right':'<path d="m9 18 6-6-6-6"/>',
+  check:         '<path d="M20 6 9 17l-5-5"/>',
+  'alert-triangle':'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  'trash-2':     '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  'file-text':   '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 13H8"/><path d="M16 17H8"/><path d="M16 13h-2"/>',
+  'file-pen':    '<path d="M12.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v9.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/>',
+  search:        '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  globe:         '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  bot:           '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  'list-checks': '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+  wrench:        '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/>',
 }
+
+function ic(name, size) {
+  const s = size ? `style="font-size:${size}px"` : ''
+  return `<svg class="ic" viewBox="0 0 24 24" ${s}>${ICONS[name] || ''}</svg>`
+}
+
+// ツールアイコンマップ
+const TOOL_ICON_MAP = {
+  Read: 'file-text', Write: 'file-pen', Edit: 'file-pen', Bash: 'terminal',
+  Glob: 'search', Grep: 'search', WebFetch: 'globe', WebSearch: 'globe',
+  Task: 'bot', TodoWrite: 'list-checks', NotebookEdit: 'file-pen',
+}
+
+// --- ヘッダー等にアイコンを注入 ---
+document.getElementById('headerLogo').innerHTML = ic('terminal', 18) + '<span id="title">claude-crew</span>'
+document.getElementById('historyBtn').innerHTML = ic('clock', 14) + ' History'
+document.getElementById('projectsBtn').innerHTML = ic('folder', 14)
+document.getElementById('tabAddBtn').innerHTML = ic('plus', 14)
+document.getElementById('abort').innerHTML = ic('square', 14)
+document.getElementById('send').innerHTML = ic('send', 14)
 
 // --- State ---
 let currentProject = null
@@ -255,7 +292,7 @@ const sessionsContainer = document.getElementById('sessionsContainer')
 
 // マルチセッション管理
 let activeTabId = null
-const tabs = new Map() // tabId → { sessionId, streamId, sending, messagesEl, fullTexts, label }
+const tabs = new Map()
 
 function genTabId() { return 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) }
 
@@ -319,13 +356,10 @@ function createNewTab(label) {
 function switchTab(tabId) {
   if (!tabs.has(tabId)) return
   activeTabId = tabId
-  // メッセージ表示切替
   tabs.forEach((t, id) => {
     t.messagesEl.classList.toggle('active', id === tabId)
   })
-  // タブUI更新
   renderTabs()
-  // 送信状態を反映
   const tab = tabs.get(tabId)
   updateStreamingUI(tab.sending)
   inputEl.focus()
@@ -334,7 +368,6 @@ function switchTab(tabId) {
 function closeTab(tabId) {
   const tab = tabs.get(tabId)
   if (!tab) return
-  // ストリーミング中なら中断
   if (tab.sending && tab.streamId) {
     fetch('/api/chat/abort', {
       method: 'POST',
@@ -345,7 +378,6 @@ function closeTab(tabId) {
   }
   tab.messagesEl.remove()
   tabs.delete(tabId)
-  // 別タブに切り替え
   if (activeTabId === tabId) {
     const remaining = Array.from(tabs.keys())
     if (remaining.length > 0) {
@@ -359,7 +391,6 @@ function closeTab(tabId) {
 }
 
 function renderTabs() {
-  // タブ要素を再構築（+ボタンの前に挿入）
   const addBtn = tabBar.querySelector('.tab-add')
   tabBar.querySelectorAll('.tab').forEach(t => t.remove())
 
@@ -371,7 +402,7 @@ function renderTabs() {
     let inner = ''
     if (tab.sending) inner += '<span class="tab-streaming"></span>'
     inner += `<span class="tab-label">${esc(tab.label)}</span>`
-    if (tabs.size > 1) inner += `<span class="tab-close" onclick="closeTab('${tabId}')"><i class="icon-x" style="font-size:11px"></i></span>`
+    if (tabs.size > 1) inner += `<span class="tab-close" onclick="closeTab('${tabId}')">${ic('x', 11)}</span>`
     el.innerHTML = inner
     tabBar.insertBefore(el, addBtn)
   })
@@ -413,7 +444,6 @@ async function init() {
   } catch (e) {
     console.error('Failed to load projects:', e)
   }
-  // 最初のタブ
   createNewTab()
 }
 
@@ -468,26 +498,40 @@ function renderSessionList(list) {
   container.innerHTML = ''
   list.forEach(s => {
     const el = document.createElement('div')
-    // activeなタブのsessionIdと一致するか判定
-    let isActive = false
-    tabs.forEach(t => { if (t.sessionId === s.sessionId) isActive = true })
-    el.className = 'session-item' + (isActive ? ' active' : '')
+    // 既にタブで開いているか判定
+    const openTabId = findTabBySessionId(s.sessionId)
+    el.className = 'session-item' + (openTabId ? ' active' : '')
     el.setAttribute('data-testid', 'session-item')
     const timeStr = new Date(s.lastUsed).toLocaleString('ja-JP', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+    const statusLabel = openTabId ? '<span style="color:var(--accent);font-size:10px">OPEN</span>' : ''
     el.innerHTML = `
-      <span class="preview">${esc(s.messagePreview || s.sessionId)}</span>
+      <span class="preview">${esc(s.messagePreview || s.sessionId)} ${statusLabel}</span>
       <div class="session-meta">
         <span>${esc(s.model || '')}</span>
         <span>${timeStr}</span>
       </div>
-      <button class="delete-session" onclick="event.stopPropagation();deleteSession('${esc(s.id || s.sessionId.slice(0,12))}')"><i class="icon-trash-2" style="font-size:11px"></i> delete</button>
+      <button class="delete-session" onclick="event.stopPropagation();deleteSession('${esc(s.id || s.sessionId.slice(0,12))}')">${ic('trash-2', 11)} delete</button>
     `
     el.onclick = () => { resumeSession(s); closeDrawer() }
     container.appendChild(el)
   })
 }
 
+function findTabBySessionId(sessionId) {
+  for (const [tabId, tab] of tabs) {
+    if (tab.sessionId === sessionId) return tabId
+  }
+  return null
+}
+
 function resumeSession(s) {
+  // 既にタブで開いているならそのタブに切り替え
+  const existingTabId = findTabBySessionId(s.sessionId)
+  if (existingTabId) {
+    switchTab(existingTabId)
+    return
+  }
+  // 新しいタブで開く
   const tabId = createNewTab(s.messagePreview || s.sessionId.slice(0, 12))
   const tab = tabs.get(tabId)
   tab.sessionId = s.sessionId
@@ -518,7 +562,6 @@ async function sendMessage() {
   inputEl.value = ''
   autoResize()
 
-  // タブラベル更新（最初のメッセージ）
   if (tab.label === 'New Chat') {
     updateTabLabel(activeTabId, text)
   }
@@ -598,9 +641,6 @@ function handleSSE(tabId, event, data, content, msgEl) {
   if (event === 'tool') {
     try {
       const info = JSON.parse(data)
-      if (info.status === 'start') {
-        // detailパネルで表示するため不要
-      }
       if (info.status === 'input' && info.detail) {
         const panel = createToolDetailPanel(info.detail)
         const firstText = content.querySelector('p, h1, h2, h3, ul, ol, pre, blockquote, table')
@@ -628,7 +668,7 @@ function handleSSE(tabId, event, data, content, msgEl) {
       const warn = document.createElement('div')
       warn.className = 'warning-badge'
       warn.setAttribute('data-testid', 'warning-badge')
-      warn.innerHTML = `<i class="icon-alert-triangle"></i> <strong>${esc(w.label)}</strong> ${esc(w.command)}`
+      warn.innerHTML = `${ic('alert-triangle', 14)} <strong>${esc(w.label)}</strong> ${esc(w.command)}`
       content.appendChild(warn)
       scrollToBottom(tabId)
     } catch {}
@@ -676,17 +716,17 @@ function createToolDetailPanel(detail) {
   panel.setAttribute('data-testid', 'tool-detail')
 
   const summary = getToolSummary(detail)
-  const iconClass = TOOL_ICONS[detail.name] || 'icon-wrench'
+  const iconName = TOOL_ICON_MAP[detail.name] || 'wrench'
 
   panel.innerHTML = `
     <div class="tool-detail-header" onclick="toggleToolDetail(this)">
-      <span class="tool-chevron"><i class="icon-chevron-right" style="font-size:9px"></i></span>
+      <span class="tool-chevron">${ic('chevron-right', 10)}</span>
       <div class="tool-icon-label">
-        <i class="${iconClass} tool-icon"></i>
+        <span class="tool-icon">${ic(iconName, 13)}</span>
         <span class="tool-name">${esc(detail.name)}</span>
       </div>
       <span class="tool-file">${esc(summary)}</span>
-      <span class="tool-status"><i class="icon-check" style="font-size:12px"></i></span>
+      <span class="tool-status">${ic('check', 12)}</span>
     </div>
     <div class="tool-detail-body">${formatToolInput(detail)}</div>
   `
