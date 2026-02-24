@@ -97,7 +97,6 @@ export function buildQueryOptions(params: ChatParams): Record<string, unknown> {
   const options: Record<string, unknown> = {
     cwd: params.cwd,
     model: params.model,
-    maxTurns: 50,
     permissionMode: sdkMode,
     allowDangerouslySkipPermissions: mode === 'default' || mode === 'yolo',
     includePartialMessages: true,
