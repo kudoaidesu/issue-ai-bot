@@ -310,7 +310,10 @@ app.get('/api/processes', (c) => {
   try {
     const raw = execSync('lsof -i -P -n -sTCP:LISTEN 2>/dev/null || true', { encoding: 'utf-8', timeout: 5000 }).trim()
     const lines = raw.split('\n').slice(1) // skip header
-    const seen = new Map<number, { pid: number; command: string; port: number; host: string }>()
+    const seen = new Map<number, { pid: number; command: string; port: number; host: string; accessible: boolean }>()
+
+    // システムプロセス・ブラウザ内部ポートは除外
+    const ignoreCommands = new Set(['Google', 'GoogleSof', 'com.apple', 'rapportd', 'sharingd', 'ControlCe'])
 
     for (const line of lines) {
       const parts = line.split(/\s+/)
@@ -321,10 +324,18 @@ app.get('/api/processes', (c) => {
       const portMatch = nameCol.match(/:(\d+)$/)
       if (!portMatch) continue
       const port = parseInt(portMatch[1], 10)
+
+      // システムプロセスをスキップ
+      if (ignoreCommands.has(command)) continue
+
       // 重複排除（同一ポート最初のみ）
       if (!seen.has(port)) {
         const host = nameCol.replace(`:${port}`, '')
-        seen.set(port, { pid, command, port, host })
+        // Tailscaleからアクセス可能か判定
+        // 0.0.0.0 / * / [::] = 全インターフェース → アクセス可能
+        // 127.0.0.1 / [::1] = ローカルのみ → アクセス不可
+        const accessible = host === '*' || host === '0.0.0.0' || host === '[::]' || host.startsWith('100.')
+        seen.set(port, { pid, command, port, host, accessible })
       }
     }
 

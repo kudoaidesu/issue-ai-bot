@@ -166,10 +166,10 @@ pre:hover .code-copy-btn{opacity:1}
 /* ── ローディング ── */
 .typing{display:flex;align-items:center;gap:6px;padding:8px 0;color:var(--muted);font-size:13px}
 .typing-dots{display:flex;gap:3px}
-.typing-dots span{width:5px;height:5px;background:var(--accent);border-radius:50%;animation:bounce .6s infinite alternate;opacity:.5}
+.typing-dots span{width:7px;height:7px;background:var(--accent);border-radius:50%;animation:bounce .6s infinite alternate;opacity:1}
 .typing-dots span:nth-child(2){animation-delay:.2s}
 .typing-dots span:nth-child(3){animation-delay:.4s}
-@keyframes bounce{to{opacity:.15;transform:translateY(-3px)}}
+@keyframes bounce{to{opacity:.3;transform:translateY(-4px)}}
 
 /* ── ドロワー ── */
 .drawer{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:10;display:none;backdrop-filter:blur(2px)}
@@ -362,6 +362,7 @@ pre:hover .code-copy-btn{opacity:1}
     </div>
     <div id="servicesTab" class="drawer-tab-content">
       <div id="servicesList"></div>
+      <div style="color:var(--muted);font-size:11px;padding:8px 12px;line-height:1.5;opacity:.7">Tip: スマホからアクセスするには <code style="font-size:11px;background:var(--surface1);padding:1px 4px;border-radius:3px">0.0.0.0</code> でバインドが必要。例: <code style="font-size:11px;background:var(--surface1);padding:1px 4px;border-radius:3px">next dev --hostname 0.0.0.0</code></div>
     </div>
   </div>
 </div>
@@ -1675,11 +1676,18 @@ async function loadServices() {
       return
     }
     container.innerHTML = ''
-    data.items.forEach(p => {
+    const accessible = data.items.filter(p => p.accessible)
+    const localOnly = data.items.filter(p => !p.accessible)
+
+    if (accessible.length === 0 && localOnly.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No listening services found</div>'
+      return
+    }
+
+    accessible.forEach(p => {
       const el = document.createElement('div')
       el.className = 'service-item'
-      // Tailscale IPに置換してアクセス可能にする
-      const accessHost = (p.host === '*' || p.host === '0.0.0.0' || p.host === '127.0.0.1') ? location.hostname : p.host
+      const accessHost = (p.host === '*' || p.host === '0.0.0.0' || p.host === '[::]') ? location.hostname : p.host
       const url = `http://${accessHost}:${p.port}`
       el.innerHTML = `
         <span class="port-badge">:${p.port}</span>
@@ -1688,6 +1696,24 @@ async function loadServices() {
       `
       container.appendChild(el)
     })
+
+    if (localOnly.length > 0) {
+      const sep = document.createElement('div')
+      sep.style.cssText = 'color:var(--muted);font-size:11px;padding:8px 12px 4px;opacity:.7'
+      sep.textContent = `Local only (${localOnly.length})`
+      container.appendChild(sep)
+      localOnly.forEach(p => {
+        const el = document.createElement('div')
+        el.className = 'service-item'
+        el.style.opacity = '.5'
+        el.innerHTML = `
+          <span class="port-badge" style="background:var(--surface1)">:${p.port}</span>
+          <span style="font-size:13px;color:var(--muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis">${esc(p.command)} (PID ${p.pid})</span>
+          <span style="font-size:11px;color:var(--muted)">127.0.0.1</span>
+        `
+        container.appendChild(el)
+      })
+    }
   } catch (e) {
     container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Error: ${esc(String(e))}</div>`
   }
