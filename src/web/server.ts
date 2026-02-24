@@ -184,6 +184,157 @@ app.get('/api/health', (c) => {
   return c.json({ ok: true, timestamp: Date.now() })
 })
 
+// --- ファイルツリー・ソース閲覧 API ---
+
+/** ディレクトリの内容を返す */
+app.get('/api/files', (c) => {
+  const dirPath = c.req.query('path')
+  if (!dirPath) return c.json({ error: 'path is required' }, 400)
+
+  try {
+    const entries = readdirSync(dirPath, { withFileTypes: true })
+    const items = entries
+      .filter(e => !e.name.startsWith('.'))
+      .map(e => {
+        const fullPath = join(dirPath, e.name)
+        const isDir = e.isDirectory()
+        let size = 0
+        if (!isDir) {
+          try { size = statSync(fullPath).size } catch { /* skip */ }
+        }
+        return { name: e.name, path: fullPath, isDir, size }
+      })
+      .sort((a, b) => {
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+    return c.json({ items })
+  } catch (e) {
+    return c.json({ error: String(e) }, 400)
+  }
+})
+
+/** ファイルの中身を返す */
+app.get('/api/files/content', (c) => {
+  const filePath = c.req.query('path')
+  if (!filePath) return c.json({ error: 'path is required' }, 400)
+
+  try {
+    const stat = statSync(filePath)
+    // 1MB以上は拒否
+    if (stat.size > 1024 * 1024) {
+      return c.json({ error: 'File too large (>1MB)' }, 400)
+    }
+    const content = readFileSync(filePath, 'utf-8')
+    return c.json({ content, size: stat.size, path: filePath })
+  } catch (e) {
+    return c.json({ error: String(e) }, 400)
+  }
+})
+
+/** ファイル名検索（再帰、最大100件） */
+app.get('/api/files/search', (c) => {
+  const project = c.req.query('project')
+  const query = c.req.query('q')
+  if (!project || !query) return c.json({ items: [] })
+
+  const results: Array<{ name: string; path: string; isDir: boolean }> = []
+  const lowerQ = query.toLowerCase()
+  const maxResults = 100
+  const ignoreDirs = new Set(['node_modules', '.git', 'dist', '.next', '.cache', 'coverage', '__pycache__'])
+
+  function walk(dir: string, depth: number) {
+    if (depth > 8 || results.length >= maxResults) return
+    try {
+      const entries = readdirSync(dir, { withFileTypes: true })
+      for (const e of entries) {
+        if (results.length >= maxResults) break
+        if (e.name.startsWith('.') || ignoreDirs.has(e.name)) continue
+        const fullPath = join(dir, e.name)
+        if (e.name.toLowerCase().includes(lowerQ)) {
+          results.push({ name: e.name, path: fullPath, isDir: e.isDirectory() })
+        }
+        if (e.isDirectory()) walk(fullPath, depth + 1)
+      }
+    } catch { /* skip unreadable dirs */ }
+  }
+  walk(project, 0)
+  return c.json({ items: results })
+})
+
+// --- Git 状況 API ---
+app.get('/api/git/status', (c) => {
+  const project = c.req.query('project')
+  if (!project) return c.json({ error: 'project is required' }, 400)
+
+  try {
+    // ブランチ名
+    const branch = execSync(`git -C "${project}" branch --show-current`, { encoding: 'utf-8', timeout: 5000 }).trim()
+
+    // 未コミットファイル
+    const statusRaw = execSync(`git -C "${project}" status --porcelain`, { encoding: 'utf-8', timeout: 5000 }).trim()
+    const files = statusRaw ? statusRaw.split('\n').map(line => ({
+      status: line.slice(0, 2).trim(),
+      file: line.slice(2).trimStart(),
+    })) : []
+
+    // 未プッシュコミット数
+    let unpushed = 0
+    try {
+      const count = execSync(`git -C "${project}" rev-list --count @{u}..HEAD`, { encoding: 'utf-8', timeout: 5000 }).trim()
+      unpushed = parseInt(count, 10) || 0
+    } catch { /* no upstream */ }
+
+    // ブランチ一覧
+    let branches: Array<{ name: string; current: boolean }> = []
+    try {
+      const branchRaw = execSync(`git -C "${project}" branch --format="%(refname:short)"`, { encoding: 'utf-8', timeout: 5000 }).trim()
+      branches = branchRaw ? branchRaw.split('\n').map(b => ({ name: b, current: b === branch })) : []
+    } catch { /* skip */ }
+
+    // リモートURL → repo
+    let repo = ''
+    try {
+      const url = execSync(`git -C "${project}" remote get-url origin`, { encoding: 'utf-8', timeout: 3000 }).trim()
+      repo = extractRepo(url)
+    } catch { /* no remote */ }
+
+    return c.json({ branch, branches, files, unpushed, repo })
+  } catch (e) {
+    return c.json({ error: String(e) }, 500)
+  }
+})
+
+// --- プロセス/サーバー一覧 API ---
+app.get('/api/processes', (c) => {
+  try {
+    const raw = execSync('lsof -i -P -n -sTCP:LISTEN 2>/dev/null || true', { encoding: 'utf-8', timeout: 5000 }).trim()
+    const lines = raw.split('\n').slice(1) // skip header
+    const seen = new Map<number, { pid: number; command: string; port: number; host: string }>()
+
+    for (const line of lines) {
+      const parts = line.split(/\s+/)
+      if (parts.length < 9) continue
+      const command = parts[0]
+      const pid = parseInt(parts[1], 10)
+      const nameCol = parts[8] || ''
+      const portMatch = nameCol.match(/:(\d+)$/)
+      if (!portMatch) continue
+      const port = parseInt(portMatch[1], 10)
+      // 重複排除（同一ポート最初のみ）
+      if (!seen.has(port)) {
+        const host = nameCol.replace(`:${port}`, '')
+        seen.set(port, { pid, command, port, host })
+      }
+    }
+
+    const items = Array.from(seen.values()).sort((a, b) => a.port - b.port)
+    return c.json({ items })
+  } catch (e) {
+    return c.json({ items: [] })
+  }
+})
+
 // --- SPA フォールバック ---
 app.get('*', (c) => {
   try {

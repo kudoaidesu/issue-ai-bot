@@ -202,6 +202,29 @@ pre:hover .code-copy-btn{opacity:1}
 .load-more-btn{width:100%;padding:10px;margin-top:6px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font-sans);transition:all .1s}
 .load-more-btn:hover{background:var(--border);color:var(--text)}
 
+/* ── ソースビューア ── */
+.source-viewer{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:20;backdrop-filter:blur(2px)}
+.source-viewer-content{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--bg);display:flex;flex-direction:column}
+.source-viewer-header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+/* ── ファイルツリー ── */
+.file-item{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:13px;font-family:var(--font-mono);color:var(--text);cursor:pointer;border-radius:6px;transition:background .1s}
+.file-item:hover{background:var(--surface-hover)}
+.file-item.dir{color:var(--accent)}
+.file-item .file-size{font-size:11px;color:var(--muted);margin-left:auto}
+/* ── Git ステータス ── */
+.git-branch{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);margin-bottom:8px}
+.git-stat{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:13px;font-family:var(--font-mono);color:var(--text);border-bottom:1px solid var(--border)}
+.git-stat .badge{display:inline-flex;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
+.git-stat .badge.modified{background:var(--warning-bg);color:var(--warning)}
+.git-stat .badge.added{background:rgba(166,227,161,.15);color:var(--success)}
+.git-stat .badge.deleted{background:var(--danger-bg);color:var(--danger)}
+.git-stat .badge.untracked{background:rgba(137,180,250,.15);color:#89b4fa}
+/* ── サービス一覧 ── */
+.service-item{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--surface)}
+.service-item .port-badge{background:var(--accent-dim);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;font-family:var(--font-mono)}
+.service-item .open-btn{margin-left:auto;background:var(--accent);color:#1e1e2e;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--font-mono);white-space:nowrap}
+.service-item .open-btn:hover{opacity:.9}
+
 /* ── レスポンシブ ── */
 @media(max-width:480px){
   .header{gap:4px;padding:8px 10px}
@@ -299,6 +322,9 @@ pre:hover .code-copy-btn{opacity:1}
   <div class="drawer-content" onclick="event.stopPropagation()">
     <div class="drawer-tabs">
       <button class="drawer-tab active" data-tab="sessions" onclick="switchDrawerTab('sessions')">Sessions</button>
+      <button class="drawer-tab" data-tab="files" onclick="switchDrawerTab('files')">Files</button>
+      <button class="drawer-tab" data-tab="git" onclick="switchDrawerTab('git')">Git</button>
+      <button class="drawer-tab" data-tab="services" onclick="switchDrawerTab('services')">Services</button>
       <button class="drawer-tab" data-tab="projects" onclick="switchDrawerTab('projects')">Projects</button>
     </div>
     <div id="sessionsTab" class="drawer-tab-content active">
@@ -320,6 +346,35 @@ pre:hover .code-copy-btn{opacity:1}
       </div>
       <div id="projectList"></div>
     </div>
+    <div id="filesTab" class="drawer-tab-content">
+      <div style="margin-bottom:8px">
+        <div style="position:relative">
+          <input id="fileSearchInput" type="text" placeholder="Search files..." oninput="onFileSearch()" style="width:100%;box-sizing:border-box;padding:8px 8px 8px 32px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font-mono)" />
+          <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;display:flex" id="fileSearchIcon"></span>
+        </div>
+      </div>
+      <div id="fileSearchResults" style="display:none;margin-bottom:8px"></div>
+      <div id="fileCurrentPath" style="font-size:12px;color:var(--muted);padding:4px 0 8px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left"></div>
+      <div id="fileTree"></div>
+    </div>
+    <div id="gitTab" class="drawer-tab-content">
+      <div id="gitStatus"></div>
+    </div>
+    <div id="servicesTab" class="drawer-tab-content">
+      <div id="servicesList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ソースビューアモーダル -->
+<div class="source-viewer" id="sourceViewer" style="display:none" onclick="closeSourceViewer()">
+  <div class="source-viewer-content" onclick="event.stopPropagation()">
+    <div class="source-viewer-header">
+      <span id="sourceViewerTitle" style="font-size:13px;color:var(--text);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+      <button onclick="copySourceContent()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--font-mono);display:flex;align-items:center;gap:4px" id="sourceCopyBtn">Copy</button>
+      <button onclick="closeSourceViewer()" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;display:flex;align-items:center" id="sourceCloseBtn"></button>
+    </div>
+    <pre id="sourceViewerCode" style="margin:0;padding:12px;overflow:auto;font-size:13px;font-family:var(--font-mono);color:var(--text);line-height:1.5;white-space:pre;-webkit-overflow-scrolling:touch"></pre>
   </div>
 </div>
 
@@ -361,6 +416,12 @@ const ICONS = {
   'edit-3':      '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   'download':    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
   'menu':        '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  'github':      '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/>',
+  'git-branch':  '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  'server':      '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+  'external-link':'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  'chevron-down':'<path d="m6 9 6 6 6-6"/>',
+  'eye':         '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
 }
 
 function ic(name, size) {
@@ -384,6 +445,9 @@ document.getElementById('cmdBtn').innerHTML = ic('slash', 14)
 document.getElementById('filesBtn').innerHTML = ic('upload', 14)
 document.getElementById('abort').innerHTML = ic('square', 14)
 document.getElementById('send').innerHTML = ic('send', 14)
+document.getElementById('fileSearchIcon').innerHTML = ic('search', 14)
+document.getElementById('sourceCloseBtn').innerHTML = ic('x', 16)
+document.getElementById('sourceCopyBtn').innerHTML = ic('copy', 12) + ' Copy'
 
 // --- State ---
 let currentProject = null
@@ -1073,10 +1137,15 @@ function closeDrawer() { document.getElementById('drawer').classList.remove('ope
 
 function switchDrawerTab(tab) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab))
-  document.getElementById('projectsTab').classList.toggle('active', tab === 'projects')
-  document.getElementById('sessionsTab').classList.toggle('active', tab === 'sessions')
+  ;['sessions', 'projects', 'files', 'git', 'services'].forEach(id => {
+    const el = document.getElementById(id + 'Tab')
+    if (el) el.classList.toggle('active', tab === id)
+  })
   if (tab === 'sessions') loadSessions()
   if (tab === 'projects') refreshProjects()
+  if (tab === 'files') loadFileTree()
+  if (tab === 'git') loadGitStatus()
+  if (tab === 'services') loadServices()
 }
 
 // --- セッション履歴 ---
@@ -1590,6 +1659,266 @@ if (isTouchDevice) {
     if (footer && footer.contains(e.target)) return
     inputEl.blur()
   })
+}
+
+// =====================================================
+// 機能1: サービス/プロセス一覧 + ワンタップアクセス
+// =====================================================
+async function loadServices() {
+  const container = document.getElementById('servicesList')
+  container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">Loading...</div>'
+  try {
+    const res = await fetch('/api/processes')
+    const data = await res.json()
+    if (!data.items || data.items.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No listening services found</div>'
+      return
+    }
+    container.innerHTML = ''
+    data.items.forEach(p => {
+      const el = document.createElement('div')
+      el.className = 'service-item'
+      // Tailscale IPに置換してアクセス可能にする
+      const accessHost = (p.host === '*' || p.host === '0.0.0.0' || p.host === '127.0.0.1') ? location.hostname : p.host
+      const url = `http://${accessHost}:${p.port}`
+      el.innerHTML = `
+        <span class="port-badge">:${p.port}</span>
+        <span style="font-size:13px;color:var(--text);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis">${esc(p.command)} (PID ${p.pid})</span>
+        <button class="open-btn" onclick="event.stopPropagation();window.open('${url}','_blank')">Open ${ic('external-link', 12)}</button>
+      `
+      container.appendChild(el)
+    })
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Error: ${esc(String(e))}</div>`
+  }
+}
+
+// =====================================================
+// 機能2: ファイルツリー + ソースビューア + 検索
+// =====================================================
+let fileTreePath = '' // 現在のツリー表示パス
+let fileSearchTimer = null
+
+async function loadFileTree(path) {
+  const container = document.getElementById('fileTree')
+  const dirPath = path || currentProject
+  if (!dirPath) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No project selected</div>'
+    return
+  }
+  fileTreePath = dirPath
+  // 現在パス表示（プロジェクトルートからの相対パス）
+  const pathLabel = document.getElementById('fileCurrentPath')
+  const relPath = dirPath.replace(currentProject, '').replace(/^\//, '') || '/'
+  pathLabel.textContent = relPath
+  container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Loading...</div>'
+  try {
+    const res = await fetch('/api/files?path=' + encodeURIComponent(dirPath))
+    const data = await res.json()
+    container.innerHTML = ''
+
+    // 上の階層に戻るボタン（ルートでなければ）
+    if (dirPath !== currentProject) {
+      const back = document.createElement('div')
+      back.className = 'file-item dir'
+      back.innerHTML = `${ic('chevron-right', 14)} <span style="transform:rotate(180deg);display:inline-flex">${ic('chevron-right', 14)}</span> ..`
+      back.style.cssText = 'opacity:.7'
+      back.onclick = () => {
+        const parent = dirPath.replace(/\/[^/]+$/, '')
+        loadFileTree(parent || currentProject)
+      }
+      container.appendChild(back)
+    }
+
+    if (!data.items || data.items.length === 0) {
+      container.innerHTML += '<div style="color:var(--muted);font-size:13px;padding:8px">Empty directory</div>'
+      return
+    }
+
+    data.items.forEach(item => {
+      const el = document.createElement('div')
+      el.className = 'file-item' + (item.isDir ? ' dir' : '')
+      const icon = item.isDir ? ic('folder', 14) : ic('file-text', 14)
+      const sizeStr = item.isDir ? '' : `<span class="file-size">${formatSize(item.size)}</span>`
+      el.innerHTML = `${icon} <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>${sizeStr}`
+      el.onclick = () => {
+        if (item.isDir) {
+          loadFileTree(item.path)
+        } else {
+          openSourceViewer(item.path, item.name)
+        }
+      }
+      container.appendChild(el)
+    })
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:8px">Error loading files</div>`
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
+}
+
+function onFileSearch() {
+  clearTimeout(fileSearchTimer)
+  const q = document.getElementById('fileSearchInput').value.trim()
+  const resultsEl = document.getElementById('fileSearchResults')
+  if (!q) {
+    resultsEl.style.display = 'none'
+    resultsEl.innerHTML = ''
+    return
+  }
+  fileSearchTimer = setTimeout(async () => {
+    try {
+      const params = new URLSearchParams({ project: currentProject || '', q })
+      const res = await fetch('/api/files/search?' + params)
+      const data = await res.json()
+      resultsEl.style.display = 'block'
+      if (!data.items || data.items.length === 0) {
+        resultsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">No matches</div>'
+        return
+      }
+      resultsEl.innerHTML = ''
+      data.items.slice(0, 30).forEach(item => {
+        const el = document.createElement('div')
+        el.className = 'file-item' + (item.isDir ? ' dir' : '')
+        const icon = item.isDir ? ic('folder', 14) : ic('file-text', 14)
+        const relPath = item.path.replace(currentProject + '/', '')
+        el.innerHTML = `${icon} <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${esc(relPath)}</span>`
+        el.onclick = () => {
+          if (item.isDir) {
+            loadFileTree(item.path)
+            resultsEl.style.display = 'none'
+            document.getElementById('fileSearchInput').value = ''
+          } else {
+            openSourceViewer(item.path, item.name)
+          }
+        }
+        resultsEl.appendChild(el)
+      })
+    } catch { resultsEl.innerHTML = '' }
+  }, 300)
+}
+
+let currentSourceContent = ''
+async function openSourceViewer(filePath, fileName) {
+  const viewer = document.getElementById('sourceViewer')
+  const title = document.getElementById('sourceViewerTitle')
+  const code = document.getElementById('sourceViewerCode')
+  title.textContent = fileName || filePath.split('/').pop()
+  code.textContent = 'Loading...'
+  viewer.style.display = 'block'
+
+  try {
+    const res = await fetch('/api/files/content?path=' + encodeURIComponent(filePath))
+    const data = await res.json()
+    if (data.error) {
+      code.textContent = 'Error: ' + data.error
+      currentSourceContent = ''
+    } else {
+      // 行番号付き表示
+      const lines = data.content.split('\n')
+      const padLen = String(lines.length).length
+      const numbered = lines.map((line, i) => {
+        const num = String(i + 1).padStart(padLen, ' ')
+        return `<span style="color:var(--muted);user-select:none">${num}</span>  ${esc(line)}`
+      }).join('\n')
+      code.innerHTML = numbered
+      currentSourceContent = data.content
+    }
+  } catch (e) {
+    code.textContent = 'Failed to load file'
+    currentSourceContent = ''
+  }
+}
+
+function closeSourceViewer() {
+  document.getElementById('sourceViewer').style.display = 'none'
+}
+
+function copySourceContent() {
+  if (!currentSourceContent) return
+  navigator.clipboard.writeText(currentSourceContent).then(() => {
+    const btn = document.getElementById('sourceCopyBtn')
+    btn.innerHTML = ic('check', 12) + ' Copied!'
+    setTimeout(() => { btn.innerHTML = ic('copy', 12) + ' Copy' }, 2000)
+  })
+}
+
+// =====================================================
+// 機能3: Git状況表示
+// =====================================================
+async function loadGitStatus() {
+  const container = document.getElementById('gitStatus')
+  if (!currentProject) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No project selected</div>'
+    return
+  }
+  container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">Loading...</div>'
+  try {
+    const res = await fetch('/api/git/status?project=' + encodeURIComponent(currentProject))
+    const data = await res.json()
+    if (data.error) {
+      container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">${esc(data.error)}</div>`
+      return
+    }
+
+    let html = ''
+    // ブランチ + 未プッシュ
+    html += `<div class="git-branch">${ic('git-branch', 16)} <span style="font-size:14px;font-family:var(--font-mono);font-weight:600">${esc(data.branch)}</span>`
+    if (data.unpushed > 0) {
+      html += ` <span style="margin-left:auto;background:var(--warning-bg);color:var(--warning);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">${data.unpushed} unpushed</span>`
+    }
+    html += '</div>'
+
+    // ブランチ一覧（読み取り専用）
+    if (data.branches && data.branches.length > 1) {
+      html += `<div style="margin-bottom:8px">`
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Branches</div>`
+      html += `<div style="display:flex;gap:4px;flex-wrap:wrap">`
+      data.branches.forEach(b => {
+        if (b.current) {
+          html += `<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-family:var(--font-mono);background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-border);font-weight:600">${esc(b.name)}</span>`
+        } else {
+          html += `<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-family:var(--font-mono);background:var(--surface);color:var(--muted);border:1px solid var(--border)">${esc(b.name)}</span>`
+        }
+      })
+      html += `</div></div>`
+    }
+
+    // GitHub リンク
+    if (data.repo) {
+      html += `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">`
+      html += `<a href="https://github.com/${data.repo}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font-mono);text-decoration:none;transition:all .1s">${ic('github', 14)} Repo</a>`
+      html += `<a href="https://github.com/${data.repo}/issues" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font-mono);text-decoration:none">${ic('file-text', 14)} Issues</a>`
+      html += `<a href="https://github.com/${data.repo}/pulls" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font-mono);text-decoration:none">${ic('git-branch', 14)} PRs</a>`
+      html += `</div>`
+
+    }
+
+    // ファイル一覧
+    if (data.files.length === 0) {
+      html += '<div style="color:var(--success);font-size:13px;padding:10px;text-align:center">' + ic('check', 14) + ' Working tree clean</div>'
+    } else {
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">${data.files.length} changed files</div>`
+      data.files.forEach(f => {
+        let badgeClass = 'modified'
+        let label = f.status
+        if (f.status === 'M') { badgeClass = 'modified'; label = 'M' }
+        else if (f.status === 'A') { badgeClass = 'added'; label = 'A' }
+        else if (f.status === 'D') { badgeClass = 'deleted'; label = 'D' }
+        else if (f.status === '??' || f.status === '?') { badgeClass = 'untracked'; label = '?' }
+        else if (f.status === 'R') { badgeClass = 'modified'; label = 'R' }
+        html += `<div class="git-stat"><span class="badge ${badgeClass}">${label}</span> <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file)}</span></div>`
+      })
+    }
+
+    container.innerHTML = html
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Failed to load Git status</div>`
+  }
 }
 
 init()
