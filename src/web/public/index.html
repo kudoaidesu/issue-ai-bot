@@ -420,15 +420,16 @@ function copyCode(btn) {
 // --- モデル選択（ヘッダーのselectのみで管理） ---
 
 // --- Permission Mode ---
-// 3 states: 'default' → 'plan' → 'auto-accept' → 'default'
+// 4 states: 'default' → 'plan' → 'auto-accept' → 'yolo' → 'default'
 let permissionMode = 'default'
 const PERM_MODES = {
   'default':     { label: 'Default', icon: 'shield', color: 'var(--muted)', banner: false },
   'plan':        { label: 'Plan', icon: 'map-pin', color: 'var(--accent)', banner: true, bannerBg: 'var(--accent-dim)', bannerBorder: 'var(--accent-border)', bannerText: 'Claude will plan before acting' },
   'auto-accept': { label: 'Auto', icon: 'zap', color: 'var(--warning)', banner: true, bannerBg: 'var(--warning-bg)', bannerBorder: 'rgba(249,226,175,.15)', bannerText: 'Auto-accept — Claude will act without asking' },
+  'yolo':        { label: 'YOLO', icon: 'alert-triangle', color: 'var(--danger)', banner: true, bannerBg: 'var(--danger-bg)', bannerBorder: 'rgba(243,139,168,.3)', bannerText: 'YOLO — All tools allowed, no limits (--dangerously-allow-all-tools)' },
 }
 function cyclePermissionMode() {
-  const order = ['default', 'plan', 'auto-accept']
+  const order = ['default', 'plan', 'auto-accept', 'yolo']
   const idx = (order.indexOf(permissionMode) + 1) % order.length
   setPermissionMode(order[idx])
 }

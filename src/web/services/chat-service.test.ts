@@ -360,6 +360,13 @@ describe('chat-service', () => {
       expect(opts.allowDangerouslySkipPermissions).toBe(true)
     })
 
+    it('permissionMode "yolo" → bypassPermissions + dangerouslySkip + maxTurns 200', () => {
+      const opts = buildQueryOptions({ message: 'hello', cwd: '/tmp', model: 'sonnet', permissionMode: 'yolo' })
+      expect(opts.permissionMode).toBe('bypassPermissions')
+      expect(opts.allowDangerouslySkipPermissions).toBe(true)
+      expect(opts.maxTurns).toBe(200)
+    })
+
     it('複数のtool_useブロック → それぞれの input イベントを返す', () => {
       const msg: SdkMessage = {
         type: 'assistant',

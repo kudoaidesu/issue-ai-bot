@@ -85,16 +85,21 @@ async function loadSdk(): Promise<SdkModule> {
 // ── Query Options ビルダー（テスト可能） ──────────────
 
 export function buildQueryOptions(params: ChatParams): Record<string, unknown> {
-  // permissionMode: 'default' → 通常確認, 'plan' → 計画モード, 'auto-accept' → 自動承認
-  const mode = params.permissionMode || (params.planMode ? 'plan' : undefined)
-  const isBypass = !mode || mode === 'default'
-  const isAutoAccept = mode === 'auto-accept'
+  // permissionMode mapping:
+  //   'default'     → bypassPermissions (個人サーバーのデフォルト)
+  //   'plan'        → plan (計画モード)
+  //   'auto-accept' → acceptEdits (編集のみ自動承認)
+  //   'yolo'        → bypassPermissions + dangerouslySkipPermissions (全ツール無制限)
+  const mode = params.permissionMode || (params.planMode ? 'plan' : 'default')
+  const sdkMode = mode === 'plan' ? 'plan'
+    : mode === 'auto-accept' ? 'acceptEdits'
+    : 'bypassPermissions'
   const options: Record<string, unknown> = {
     cwd: params.cwd,
     model: params.model,
-    maxTurns: 50,
-    permissionMode: mode === 'plan' ? 'plan' : isAutoAccept ? 'acceptEdits' : 'bypassPermissions',
-    allowDangerouslySkipPermissions: isBypass,
+    maxTurns: mode === 'yolo' ? 200 : 50,
+    permissionMode: sdkMode,
+    allowDangerouslySkipPermissions: mode === 'default' || mode === 'yolo',
     includePartialMessages: true,
     // Claude Code CLI 相当: プロジェクト設定 + ユーザー設定を自動読み込み
     settingSources: ['project', 'user'],
