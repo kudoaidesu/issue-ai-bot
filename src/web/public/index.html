@@ -147,6 +147,13 @@ pre:hover .code-copy-btn{opacity:1}
 .input-footer button.send-btn:disabled{opacity:.3}
 .input-footer button.abort-btn{display:none;background:var(--danger-bg);color:var(--danger)}
 .input-footer button.abort-btn:hover{background:rgba(243,139,168,.2)}
+.attachments{display:none;flex-wrap:wrap;gap:6px;padding:8px 10px 4px}
+.attachments:not(:empty){display:flex}
+.attach-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:var(--font-mono);color:var(--text);max-width:200px}
+.attach-chip .attach-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.attach-chip .attach-remove{background:none;border:none;color:var(--muted);cursor:pointer;padding:0;margin:0;width:auto;height:auto;font-size:12px;display:flex;align-items:center}
+.attach-chip .attach-remove:hover{color:var(--danger)}
+.attach-chip .attach-thumb{width:24px;height:24px;border-radius:3px;object-fit:cover}
 
 /* ── ローディング ── */
 .typing{display:flex;align-items:center;gap:6px;padding:8px 0;color:var(--muted);font-size:13px}
@@ -276,6 +283,7 @@ pre:hover .code-copy-btn{opacity:1}
       <button class="send-btn" id="send" onclick="sendMessage()" title="Send (Enter)"></button>
     </div>
   </div>
+  <div class="attachments" id="attachments"></div>
 </div>
 
 <div class="drawer" id="drawer" onclick="closeDrawer()">
@@ -462,10 +470,48 @@ function clearCurrentTab() {
 }
 
 // --- File Upload ---
+const pendingFiles = []
+const attachmentsEl = document.getElementById('attachments')
+
+function renderAttachments() {
+  attachmentsEl.innerHTML = ''
+  pendingFiles.forEach((f, i) => {
+    const chip = document.createElement('div')
+    chip.className = 'attach-chip'
+    if (f.thumb) {
+      const img = document.createElement('img')
+      img.className = 'attach-thumb'
+      img.src = f.thumb
+      chip.appendChild(img)
+    } else {
+      const iconSpan = document.createElement('span')
+      iconSpan.innerHTML = ic('file-text', 12)
+      chip.appendChild(iconSpan)
+    }
+    const name = document.createElement('span')
+    name.className = 'attach-name'
+    name.textContent = f.name
+    chip.appendChild(name)
+    const rm = document.createElement('button')
+    rm.className = 'attach-remove'
+    rm.innerHTML = ic('x', 10)
+    rm.onclick = () => { pendingFiles.splice(i, 1); renderAttachments() }
+    chip.appendChild(rm)
+    attachmentsEl.appendChild(chip)
+  })
+}
+
+function buildFilePayload() {
+  if (pendingFiles.length === 0) return ''
+  const parts = pendingFiles.map(f => f.isImage ? `[image: ${f.name}]\n${f.data}` : `--- ${f.name} ---\n${f.data}`)
+  pendingFiles.length = 0
+  renderAttachments()
+  return parts.join('\n\n')
+}
+
 document.getElementById('fileInput').addEventListener('change', async (e) => {
   const files = e.target.files
   if (!files || files.length === 0) return
-  const parts = []
   for (const file of files) {
     if (file.type.startsWith('image/')) {
       try {
@@ -475,19 +521,16 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
           reader.onerror = reject
           reader.readAsDataURL(file)
         })
-        parts.push(`[image: ${file.name}]\n${dataUrl}`)
-      } catch { parts.push(`[image: ${file.name}] (読み込みエラー)`) }
+        pendingFiles.push({ name: file.name, data: dataUrl, isImage: true, thumb: dataUrl })
+      } catch { pendingFiles.push({ name: file.name, data: `(読み込みエラー)`, isImage: true }) }
     } else {
       try {
         const text = await file.text()
-        parts.push(`--- ${file.name} ---\n${text}`)
-      } catch { parts.push(`--- ${file.name} --- (読み込みエラー)`) }
+        pendingFiles.push({ name: file.name, data: text, isImage: false })
+      } catch { pendingFiles.push({ name: file.name, data: `(読み込みエラー)`, isImage: false }) }
     }
   }
-  const sep = inputEl.value ? '\n' : ''
-  inputEl.value += sep + parts.join('\n\n')
-  inputEl.style.height = 'auto'
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px'
+  renderAttachments()
   inputEl.focus()
   e.target.value = ''
 })
@@ -710,7 +753,9 @@ async function deleteSession(id) {
 
 // --- メッセージ送信 ---
 async function sendMessage() {
-  const text = inputEl.value.trim()
+  const filePayload = buildFilePayload()
+  const raw = inputEl.value.trim()
+  const text = filePayload ? (raw ? raw + '\n\n' + filePayload : filePayload) : raw
   if (!text) return
   if (!activeTabId || !tabs.has(activeTabId)) return
 
@@ -724,11 +769,11 @@ async function sendMessage() {
   autoResize()
 
   if (tab.label === 'New Chat') {
-    updateTabLabel(activeTabId, text)
+    updateTabLabel(activeTabId, raw || 'File upload')
   }
 
   const tabId = activeTabId
-  addMessage(tabId, 'user', text)
+  addMessage(tabId, 'user', raw || '(ファイル添付)')
   const assistantEl = addMessage(tabId, 'assistant', '')
   const content = assistantEl.querySelector('.content')
   content.innerHTML = '<div class="typing"><div class="typing-dots"><span></span><span></span><span></span></div></div>'
