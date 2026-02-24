@@ -40,6 +40,7 @@ chatRoutes.post('/', async (c) => {
     project?: string
     sessionId?: string
     model?: string
+    planMode?: boolean
   }>()
 
   if (!body.message?.trim()) {
@@ -58,6 +59,7 @@ chatRoutes.post('/', async (c) => {
         cwd,
         model,
         sessionId: body.sessionId,
+        planMode: body.planMode,
       })
 
       let lastSessionId = body.sessionId || ''
@@ -110,6 +112,18 @@ chatRoutes.post('/', async (c) => {
             await stream.writeSSE({
               event: 'error',
               data: JSON.stringify({ message: event.message }),
+            })
+            break
+          case 'status':
+            await stream.writeSSE({
+              event: 'status',
+              data: JSON.stringify({ status: event.status, permissionMode: event.permissionMode }),
+            })
+            break
+          case 'compact':
+            await stream.writeSSE({
+              event: 'compact',
+              data: JSON.stringify({ trigger: event.trigger, preTokens: event.preTokens }),
             })
             break
         }

@@ -291,6 +291,57 @@ describe('chat-service', () => {
       expect(warnings[0].label).toBe('git force push')
     })
 
+    // ── Plan Mode / Compacting ────────────────────────
+
+    it('system/compact_boundary → compact イベントを返す', () => {
+      const msg: SdkMessage = {
+        type: 'system',
+        subtype: 'compact_boundary',
+        compact_metadata: { trigger: 'auto', pre_tokens: 50000 },
+      }
+      const events = parseSdkMessage(msg, 'sess')
+      const compacts = events.filter(e => e.type === 'compact') as Array<ChatEvent & { type: 'compact' }>
+      expect(compacts).toHaveLength(1)
+      expect(compacts[0].trigger).toBe('auto')
+      expect(compacts[0].preTokens).toBe(50000)
+    })
+
+    it('system/status compacting → status イベントを返す', () => {
+      const msg: SdkMessage = {
+        type: 'system',
+        subtype: 'status',
+        status: 'compacting',
+      }
+      const events = parseSdkMessage(msg, 'sess')
+      const statuses = events.filter(e => e.type === 'status') as Array<ChatEvent & { type: 'status' }>
+      expect(statuses).toHaveLength(1)
+      expect(statuses[0].status).toBe('compacting')
+    })
+
+    it('system/status permissionMode → status イベントに permissionMode を含める', () => {
+      const msg: SdkMessage = {
+        type: 'system',
+        subtype: 'status',
+        permissionMode: 'plan',
+      }
+      const events = parseSdkMessage(msg, 'sess')
+      const statuses = events.filter(e => e.type === 'status') as Array<ChatEvent & { type: 'status' }>
+      expect(statuses).toHaveLength(1)
+      expect(statuses[0].permissionMode).toBe('plan')
+    })
+
+    it('planMode true → permissionMode が plan になる', () => {
+      const opts = buildQueryOptions({ message: 'hello', cwd: '/tmp', model: 'sonnet', planMode: true })
+      expect(opts.permissionMode).toBe('plan')
+      expect(opts.allowDangerouslySkipPermissions).toBe(false)
+    })
+
+    it('planMode false → permissionMode が bypassPermissions のまま', () => {
+      const opts = buildQueryOptions({ message: 'hello', cwd: '/tmp', model: 'sonnet', planMode: false })
+      expect(opts.permissionMode).toBe('bypassPermissions')
+      expect(opts.allowDangerouslySkipPermissions).toBe(true)
+    })
+
     it('複数のtool_useブロック → それぞれの input イベントを返す', () => {
       const msg: SdkMessage = {
         type: 'assistant',

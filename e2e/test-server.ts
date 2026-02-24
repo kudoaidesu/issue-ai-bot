@@ -62,6 +62,7 @@ app.post('/api/chat', async (c) => {
     project?: string
     sessionId?: string
     model?: string
+    planMode?: boolean
   }>()
 
   if (!body.message?.trim()) {
@@ -155,6 +156,16 @@ function buildMockEvents(message: string, sessionId: string, streamId: string): 
   } else if (message.includes('code-test')) {
     // コードブロックテスト（コピーボタン確認用）
     events.push(sseEvent('text', 'Here is some code:\n\n```typescript\nconst greeting = "hello world"\nconsole.log(greeting)\n```\n'))
+  } else if (message.includes('compact-test')) {
+    // コンパクティングテスト
+    events.push(sseEvent('status', JSON.stringify({ status: 'compacting' })))
+    events.push(sseEvent('text', 'Compacting...'))
+    events.push(sseEvent('compact', JSON.stringify({ trigger: 'auto', preTokens: 50000 })))
+    events.push(sseEvent('text', ' Done.'))
+  } else if (message.includes('plan-test')) {
+    // Plan Modeテスト
+    events.push(sseEvent('status', JSON.stringify({ permissionMode: 'plan' })))
+    events.push(sseEvent('text', 'Planning mode active.'))
   } else if (message.includes('error-test')) {
     // エラーテスト
     events.push(sseEvent('error', JSON.stringify({ message: 'Test error occurred' })))

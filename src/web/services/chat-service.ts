@@ -17,6 +17,7 @@ export interface ChatParams {
   cwd: string
   model: string
   sessionId?: string
+  planMode?: boolean
 }
 
 export interface ToolDetail {
@@ -32,12 +33,17 @@ export type ChatEvent =
   | { type: 'warning'; command: string; label: string }
   | { type: 'result'; text: string; sessionId: string; cost?: number; turns?: number; durationMs?: number; isError?: boolean }
   | { type: 'error'; message: string }
+  | { type: 'status'; status: string; permissionMode?: string }
+  | { type: 'compact'; trigger: string; preTokens?: number }
 
 /** Agent SDK から返される生メッセージ */
 export interface SdkMessage {
   type: string
-  subtype?: string
+  subtype?: string // 'init' | 'compact_boundary' | 'status' etc.
   session_id?: string
+  status?: string
+  permissionMode?: string
+  compact_metadata?: { trigger?: string; pre_tokens?: number }
   message?: {
     role: string
     content: Array<{
@@ -82,8 +88,8 @@ export function buildQueryOptions(params: ChatParams): Record<string, unknown> {
     cwd: params.cwd,
     model: params.model,
     maxTurns: 50,
-    permissionMode: 'bypassPermissions',
-    allowDangerouslySkipPermissions: true,
+    permissionMode: params.planMode ? 'plan' : 'bypassPermissions',
+    allowDangerouslySkipPermissions: !params.planMode,
     includePartialMessages: true,
     // Claude Code CLI 相当: プロジェクト設定 + ユーザー設定を自動読み込み
     settingSources: ['project', 'user'],
@@ -111,6 +117,22 @@ export function parseSdkMessage(msg: SdkMessage, currentSessionId: string): Chat
   // system/init
   if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
     events.push({ type: 'session', sessionId: msg.session_id })
+  }
+
+  // system/compact_boundary — コンパクティング完了
+  if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
+    events.push({
+      type: 'compact',
+      trigger: msg.compact_metadata?.trigger || 'auto',
+      preTokens: msg.compact_metadata?.pre_tokens,
+    })
+  }
+
+  // system/status — ステータス変更（compacting, permissionMode等）
+  if (msg.type === 'system' && msg.subtype === 'status') {
+    if (msg.status || msg.permissionMode) {
+      events.push({ type: 'status', status: msg.status || '', permissionMode: msg.permissionMode })
+    }
   }
 
   // ストリーミングテキスト
