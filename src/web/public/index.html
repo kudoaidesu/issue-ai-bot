@@ -31,17 +31,17 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:2;stroke-linecap:ro
 .header-logo{display:flex;align-items:center;gap:6px;color:var(--accent);font-weight:700;font-size:13px;font-family:var(--font-mono)}
 .header-logo svg.ic{font-size:18px}
 .header-spacer{flex:1}
-.header-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:12px;font-family:var(--font-mono);cursor:pointer;display:flex;align-items:center;gap:4px;transition:all .15s}
+.header-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:10px 14px;font-size:14px;font-family:var(--font-mono);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;min-height:42px}
 .header-btn:hover{color:var(--text);border-color:var(--border-light);background:var(--surface-hover)}
 .header-btn.active{color:var(--accent);border-color:var(--accent-border)}
-.header-btn svg.ic{font-size:14px}
-.model-select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font-mono);cursor:pointer;min-width:0;flex-shrink:1}
+.header-btn svg.ic{font-size:18px}
+.model-select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:var(--font-mono);cursor:pointer;min-width:0;flex-shrink:1;min-height:42px}
 .model-select:focus{outline:none;border-color:var(--accent)}
 
 /* ── セッションタブバー ── */
 .tab-bar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab{display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;font-family:var(--font-mono);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .1s;min-width:0;max-width:180px;flex-shrink:0}
+.tab{display:flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;font-family:var(--font-mono);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .1s;min-width:0;max-width:180px;flex-shrink:0}
 .tab:hover{color:var(--text);background:var(--surface-hover)}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .tab .tab-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -50,7 +50,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:2;stroke-linecap:ro
 .tab .tab-close{color:var(--muted);cursor:pointer;padding:0 2px;border-radius:3px;transition:all .1s;flex-shrink:0;display:flex;align-items:center}
 .tab .tab-close:hover{color:var(--danger);background:var(--danger-bg)}
 .tab .tab-close svg.ic{font-size:11px}
-.tab-add{display:flex;align-items:center;justify-content:center;padding:6px 10px;color:var(--muted);cursor:pointer;transition:all .1s;flex-shrink:0}
+.tab-add{display:flex;align-items:center;justify-content:center;padding:8px 14px;color:var(--muted);cursor:pointer;transition:all .1s;flex-shrink:0}
 .tab-add:hover{color:var(--accent);background:var(--surface-hover)}
 .tab-add svg.ic{font-size:14px}
 
@@ -138,11 +138,11 @@ pre:hover .code-copy-btn{opacity:1}
 .input-box textarea{width:100%;background:transparent;color:var(--text);border:none;padding:10px 14px;font-size:14px;font-family:var(--font-sans);resize:none;min-height:40px;max-height:150px;line-height:1.4}
 .input-box textarea:focus{outline:none}
 .input-box textarea::placeholder{color:var(--muted)}
-.input-footer{display:flex;align-items:center;gap:6px;padding:4px 8px 6px}
-.input-footer button{width:30px;height:30px;border:none;border-radius:6px;background:transparent;color:var(--muted);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s}
+.input-footer{display:flex;align-items:center;gap:6px;padding:6px 8px 8px}
+.input-footer button{width:38px;height:38px;border:none;border-radius:8px;background:transparent;color:var(--muted);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s}
 .input-footer button:hover{background:var(--accent-dim);color:var(--accent)}
 .input-footer button:disabled{opacity:.3;cursor:not-allowed}
-.input-footer button.send-btn{background:var(--accent);color:#1e1e2e;border-radius:6px}
+.input-footer button.send-btn{background:var(--accent);color:#1e1e2e;border-radius:8px;width:42px;height:42px;font-size:18px}
 .input-footer button.send-btn:hover{opacity:.9}
 .input-footer button.send-btn:disabled{opacity:.3}
 .input-footer button.abort-btn{display:none;background:var(--danger-bg);color:var(--danger)}
@@ -205,14 +205,14 @@ pre:hover .code-copy-btn{opacity:1}
 /* ── レスポンシブ ── */
 @media(max-width:480px){
   .header{gap:4px;padding:8px 10px}
-  .header-logo span{display:none}
-  .header-btn{padding:4px 6px;font-size:11px}
-  .header-btn .btn-label{display:none}
-  .model-select{font-size:11px;padding:3px 4px}
-  .tab{padding:4px 8px;font-size:11px;max-width:120px}
+  .header-btn{padding:8px 10px;font-size:13px;min-height:40px}
+  .header-btn .btn-label{display:inline}
+  .model-select{font-size:13px;padding:8px 10px;min-height:40px}
+  .tab{padding:6px 10px;font-size:12px;max-width:140px}
   .input-area{padding:8px 10px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-  .input-footer{gap:3px;padding:3px 6px 4px}
-  .input-footer button{width:28px;height:28px}
+  .input-footer{gap:4px;padding:4px 6px 6px}
+  .input-footer button{width:36px;height:36px}
+  .input-footer button.send-btn{width:40px;height:40px}
   .messages{padding:10px}
 }
 @media(max-width:360px){
@@ -274,7 +274,7 @@ pre:hover .code-copy-btn{opacity:1}
   <div class="cmd-menu" id="cmdMenu"></div>
   <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
   <div class="input-box">
-    <textarea id="input" rows="1" placeholder="Ask Claude anything..." enterkeyhint="send"></textarea>
+    <textarea id="input" rows="1" placeholder="Ask Claude anything..." enterkeyhint="enter"></textarea>
     <div class="input-footer">
       <button id="cmdBtn" onclick="toggleCmdMenu()" title="Commands (/)"></button>
       <button id="filesBtn" onclick="document.getElementById('fileInput').click()" title="Upload file"></button>
@@ -452,7 +452,7 @@ function restoreProjectTabs(projectPath) {
       })
 
       if (saved.sessionId) {
-        addMessage(saved.tabId, 'assistant', `<span style="color:var(--muted);font-size:12px">Session restored: ${esc(saved.label)}</span>`)
+        setTimeout(() => loadSessionHistory(saved.tabId), 0)
       }
     })
 
@@ -560,16 +560,15 @@ function copyCode(btn) {
 // --- モデル選択（ヘッダーのselectのみで管理） ---
 
 // --- Permission Mode ---
-// 4 states: 'default' → 'plan' → 'auto-accept' → 'yolo' → 'default'
+// 3 states: 'default' → 'plan' → 'auto-accept' → 'default'
 let permissionMode = 'default'
 const PERM_MODES = {
   'default':     { label: 'Default', icon: 'shield', color: 'var(--muted)', banner: false },
   'plan':        { label: 'Plan', icon: 'map-pin', color: 'var(--accent)', banner: true, bannerBg: 'var(--accent-dim)', bannerBorder: 'var(--accent-border)', bannerText: 'Claude will plan before acting' },
   'auto-accept': { label: 'Auto', icon: 'zap', color: 'var(--warning)', banner: true, bannerBg: 'var(--warning-bg)', bannerBorder: 'rgba(249,226,175,.15)', bannerText: 'Auto-accept — Claude will act without asking' },
-  'yolo':        { label: 'YOLO', icon: 'alert-triangle', color: 'var(--danger)', banner: true, bannerBg: 'var(--danger-bg)', bannerBorder: 'rgba(243,139,168,.3)', bannerText: 'YOLO — All tools allowed, no limits (--dangerously-allow-all-tools)' },
 }
 function cyclePermissionMode() {
-  const order = ['default', 'plan', 'auto-accept', 'yolo']
+  const order = ['default', 'plan', 'auto-accept']
   const idx = (order.indexOf(permissionMode) + 1) % order.length
   setPermissionMode(order[idx])
 }
@@ -587,7 +586,7 @@ function setPermissionMode(mode) {
     banner.style.background = cfg.bannerBg
     banner.style.borderColor = cfg.bannerBorder
     banner.style.color = cfg.color
-    banner.innerHTML = `${ic(cfg.icon, 13)} <span class="plan-label">${cfg.label} Mode</span> <span>${cfg.bannerText}</span> <button class="plan-exit" onclick="setPermissionMode('default')">Exit</button>`
+    banner.innerHTML = `${ic(cfg.icon, 13)} <span class="plan-label">${cfg.label} Mode</span>`
   } else {
     banner.classList.remove('active')
     banner.innerHTML = ''
@@ -1162,6 +1161,83 @@ function findTabBySessionId(sessionId) {
   return null
 }
 
+// --- 会話履歴の読み込み・描画 ---
+async function loadSessionHistory(tabId) {
+  const tab = tabs.get(tabId)
+  if (!tab?.sessionId || !currentProject) return
+  if (tab._historyLoaded) return
+
+  tab.messagesEl.innerHTML = ''
+  const loading = document.createElement('div')
+  loading.className = 'typing'
+  loading.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div> Loading history...'
+  tab.messagesEl.appendChild(loading)
+
+  try {
+    const params = new URLSearchParams({ project: currentProject })
+    const res = await fetch(`/api/chat/history/${tab.sessionId}?${params}`)
+    const data = await res.json()
+    loading.remove()
+    if (data.messages && data.messages.length > 0) {
+      renderHistoryMessages(tabId, data.messages)
+    } else {
+      addMessage(tabId, 'assistant', `<span style="color:var(--muted);font-size:12px">Session: ${esc(tab.label)}</span>`)
+    }
+    tab._historyLoaded = true
+  } catch (e) {
+    loading.remove()
+    addMessage(tabId, 'assistant', `<span style="color:var(--muted);font-size:12px">Failed to load history</span>`)
+  }
+}
+
+function renderHistoryMessages(tabId, messages) {
+  const tab = tabs.get(tabId)
+  if (!tab) return
+
+  let currentAssistantEl = null
+  let currentContent = null
+
+  for (const msg of messages) {
+    if (msg.role === 'user' && msg.type === 'text') {
+      currentAssistantEl = null
+      currentContent = null
+      addMessage(tabId, 'user', msg.text || '')
+    }
+    else if (msg.role === 'assistant' && msg.type === 'text') {
+      if (!currentAssistantEl) {
+        currentAssistantEl = addMessage(tabId, 'assistant', '')
+        currentContent = currentAssistantEl.querySelector('.content')
+      }
+      const existingText = tab.fullTexts.get(currentContent) || ''
+      const newText = existingText + (existingText ? '\n\n' : '') + (msg.text || '')
+      tab.fullTexts.set(currentContent, newText)
+      const preserved = currentContent.querySelectorAll('.tool-detail')
+      const preservedHTML = Array.from(preserved).map(el => el.outerHTML).join('')
+      currentContent.innerHTML = preservedHTML + marked.parse(newText)
+    }
+    else if (msg.role === 'assistant' && msg.type === 'tool_use') {
+      if (!currentAssistantEl) {
+        currentAssistantEl = addMessage(tabId, 'assistant', '')
+        currentContent = currentAssistantEl.querySelector('.content')
+      }
+      const panel = createToolDetailPanel({
+        name: msg.toolUse.name,
+        input: msg.toolUse.input,
+      })
+      currentContent.appendChild(panel)
+    }
+    else if (msg.role === 'user' && msg.type === 'tool_result') {
+      if (currentContent) {
+        const panels = currentContent.querySelectorAll('.tool-detail')
+        if (panels.length > 0) {
+          appendToolOutput(panels[panels.length - 1], msg.toolResult?.output || '')
+        }
+      }
+    }
+  }
+  scrollToBottom(tabId)
+}
+
 function resumeSession(s) {
   // 既にタブで開いているならそのタブに切り替え
   const existingTabId = findTabBySessionId(s.sessionId)
@@ -1176,7 +1252,8 @@ function resumeSession(s) {
     tab.label = (s.messagePreview || s.sessionId.slice(0, 12)).slice(0, 30)
     tab.messagesEl.innerHTML = ''
     tab.fullTexts = new WeakMap()
-    addMessage(activeTabId, 'assistant', `<span style="color:var(--muted);font-size:12px">Session restored: ${esc(tab.label)}</span>`)
+    tab._historyLoaded = false
+    loadSessionHistory(activeTabId)
     renderTabs()
     saveTabs()
   }
@@ -1478,11 +1555,17 @@ function autoResize() {
   inputEl.style.height = 'auto'
   inputEl.style.height = Math.min(inputEl.scrollHeight, 150) + 'px'
 }
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 inputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-    e.preventDefault()
-    closeCmdMenu()
-    sendMessage()
+  if (e.key === 'Enter' && !e.isComposing) {
+    if (isTouchDevice) {
+      // モバイル: Enter = 改行（デフォルト動作）、送信はボタンで
+    } else if (!e.shiftKey) {
+      // デスクトップ: Enter = 送信、Shift+Enter = 改行
+      e.preventDefault()
+      closeCmdMenu()
+      sendMessage()
+    }
   }
   if (e.key === 'Escape') closeCmdMenu()
 })
@@ -1498,6 +1581,16 @@ inputEl.addEventListener('input', () => {
     closeCmdMenu()
   }
 })
+
+// モバイル: 入力エリア外タップでキーボードを閉じる
+if (isTouchDevice) {
+  document.addEventListener('touchstart', (e) => {
+    if (document.activeElement !== inputEl) return
+    const footer = document.querySelector('.input-footer')
+    if (footer && footer.contains(e.target)) return
+    inputEl.blur()
+  })
+}
 
 init()
 </script>

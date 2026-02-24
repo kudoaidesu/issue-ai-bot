@@ -6,7 +6,8 @@
  */
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync, createReadStream, existsSync } from 'node:fs'
+import { createInterface } from 'node:readline'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -150,17 +151,90 @@ function getMergedSessions(cwd?: string): SessionEntry[] {
   const memSessions = getSessions()
   if (!cwd) return memSessions
 
+  // インメモリセッションをプロジェクトでフィルタ
+  const filtered = memSessions.filter(s => s.project === cwd)
+
   const sdkSessions = scanSdkSessions(cwd)
-  const existingIds = new Set(memSessions.map(s => s.sessionId))
+  const existingIds = new Set(filtered.map(s => s.sessionId))
 
   // SDKにしかないセッションを追加
   for (const sdk of sdkSessions) {
     if (!existingIds.has(sdk.sessionId)) {
-      memSessions.push({ ...sdk, id: sdk.sessionId.slice(0, 12) } as SessionEntry & { id: string })
+      filtered.push({ ...sdk, id: sdk.sessionId.slice(0, 12) } as SessionEntry & { id: string })
     }
   }
 
-  return memSessions.sort((a, b) => b.lastUsed - a.lastUsed)
+  return filtered.sort((a, b) => b.lastUsed - a.lastUsed)
+}
+
+// --- 履歴メッセージ型 ---
+interface HistoryMessage {
+  role: 'user' | 'assistant'
+  type: 'text' | 'tool_use' | 'tool_result'
+  text?: string
+  toolUse?: { name: string; input: Record<string, unknown> }
+  toolResult?: { output: string }
+}
+
+/** JSONL ファイルをストリーミング読み取りし、UI表示用メッセージ配列に変換 */
+async function parseSessionJsonl(filePath: string): Promise<HistoryMessage[]> {
+  const messages: HistoryMessage[] = []
+
+  const rl = createInterface({
+    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    crlfDelay: Infinity,
+  })
+
+  for await (const line of rl) {
+    if (!line.trim()) continue
+    try {
+      const record = JSON.parse(line) as {
+        type?: string
+        message?: {
+          content?: Array<{
+            type: string
+            text?: string
+            name?: string
+            input?: Record<string, unknown>
+            content?: string | Array<{ type: string; text?: string }>
+            tool_use_id?: string
+          }>
+        }
+      }
+
+      const role = record.type as 'user' | 'assistant' | undefined
+      if (!role || !record.message?.content) continue
+
+      for (const c of record.message.content) {
+        if (c.type === 'thinking') continue
+
+        if (c.type === 'text' && c.text) {
+          messages.push({ role, type: 'text', text: c.text })
+        } else if (c.type === 'tool_use' && c.name) {
+          messages.push({
+            role: 'assistant',
+            type: 'tool_use',
+            toolUse: { name: c.name, input: c.input || {} },
+          })
+        } else if (c.type === 'tool_result') {
+          let output = ''
+          if (typeof c.content === 'string') {
+            output = c.content
+          } else if (Array.isArray(c.content)) {
+            output = c.content
+              .filter((x: { type: string; text?: string }) => x.type === 'text' && x.text)
+              .map((x: { text?: string }) => x.text)
+              .join('\n')
+          }
+          // 長い出力は切り詰め
+          if (output.length > 3000) output = output.slice(0, 3000) + '\n... (truncated)'
+          messages.push({ role: 'user', type: 'tool_result', toolResult: { output } })
+        }
+      }
+    } catch { /* skip malformed lines */ }
+  }
+
+  return messages
 }
 
 export const chatRoutes = new Hono()
@@ -316,5 +390,30 @@ chatRoutes.get('/sessions', (c) => {
   const all = getMergedSessions(project)
   const page = all.slice(offset, offset + limit)
   return c.json({ items: page, total: all.length, offset, limit })
+})
+
+// GET /api/chat/history/:sessionId — セッション会話履歴を返す
+chatRoutes.get('/history/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId')
+  const project = c.req.query('project')
+
+  if (!sessionId || !project) {
+    return c.json({ messages: [] })
+  }
+
+  const claudeDir = join(homedir(), '.claude', 'projects', cwdToProjectDir(project))
+  const filePath = join(claudeDir, `${sessionId}.jsonl`)
+
+  if (!existsSync(filePath)) {
+    return c.json({ messages: [] })
+  }
+
+  try {
+    const messages = await parseSessionJsonl(filePath)
+    return c.json({ messages })
+  } catch (e) {
+    log.warn(`Failed to parse session history: ${e}`)
+    return c.json({ messages: [] })
+  }
 })
 
