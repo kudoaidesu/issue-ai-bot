@@ -131,6 +131,16 @@ pre:hover .code-copy-btn{opacity:1}
 /* ── コスト表示 ── */
 .meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:12px;font-family:var(--font-mono)}
 
+/* ── Git ステータスバー（VSCode風）── */
+.git-statusbar{display:flex;align-items:center;gap:0;margin:-12px -16px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;overflow:hidden;background:var(--bg)}
+.git-statusbar:active{opacity:.75}
+.git-statusbar-left{display:flex;align-items:center;gap:5px;padding:5px 12px;font-size:12px;font-family:var(--font-mono);color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:background .1s;flex:1;min-width:0}
+.git-statusbar-left:hover{background:var(--surface-hover);color:var(--text)}
+.git-statusbar-right{display:flex;align-items:center;gap:0;flex-shrink:0}
+.git-statusbar-pill{display:flex;align-items:center;gap:4px;padding:5px 10px;font-size:12px;font-family:var(--font-mono);color:var(--muted);white-space:nowrap;transition:background .1s;border-left:1px solid var(--border)}
+.git-statusbar-pill:hover{background:var(--surface-hover);color:var(--text)}
+.git-statusbar-pill.warn{color:var(--warning)}
+
 /* ── 入力エリア ── */
 .input-area{border-top:1px solid var(--border);background:var(--surface);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));flex-shrink:0;margin-top:auto}
 .input-box{border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden;transition:border-color .15s}
@@ -294,6 +304,10 @@ pre:hover .code-copy-btn{opacity:1}
 <div id="sessionsContainer"></div>
 
 <div class="input-area" style="position:relative">
+  <div id="gitBar" class="git-statusbar" onclick="openDrawer('git')" title="Git status">
+    <div class="git-statusbar-left"><span id="gitBarBranch" style="opacity:.5">—</span></div>
+    <div class="git-statusbar-right" id="gitBarRight"></div>
+  </div>
   <div class="cmd-menu" id="cmdMenu"></div>
   <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
   <div class="input-box">
@@ -422,7 +436,8 @@ const ICONS = {
   'server':      '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
   'external-link':'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   'chevron-down':'<path d="m6 9 6 6 6-6"/>',
-  'eye':         '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  'eye':            '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  'source-control': '<circle cx="12" cy="4" r="2"/><circle cx="4.5" cy="20" r="2"/><circle cx="19.5" cy="20" r="2"/><line x1="12" y1="6" x2="4.5" y2="18"/><line x1="12" y1="6" x2="19.5" y2="18"/>',
 }
 
 function ic(name, size) {
@@ -590,6 +605,7 @@ function switchProjectTabs(newProjectPath) {
     createNewTab()
   }
   saveTabs()
+  loadGitStatus()
 }
 
 // --- marked カスタムレンダラー ---
@@ -625,15 +641,16 @@ function copyCode(btn) {
 // --- モデル選択（ヘッダーのselectのみで管理） ---
 
 // --- Permission Mode ---
-// 3 states: 'default' → 'plan' → 'auto-accept' → 'default'
+// 4 states: 'default' → 'plan' → 'auto-accept' → 'yolo' → 'default'
 let permissionMode = 'default'
 const PERM_MODES = {
   'default':     { label: 'Default', icon: 'shield', color: 'var(--muted)', banner: false },
   'plan':        { label: 'Plan', icon: 'map-pin', color: 'var(--accent)', banner: true, bannerBg: 'var(--accent-dim)', bannerBorder: 'var(--accent-border)', bannerText: 'Claude will plan before acting' },
   'auto-accept': { label: 'Auto', icon: 'zap', color: 'var(--warning)', banner: true, bannerBg: 'var(--warning-bg)', bannerBorder: 'rgba(249,226,175,.15)', bannerText: 'Auto-accept — Claude will act without asking' },
+  'yolo':        { label: 'YOLO', icon: 'alert-triangle', color: 'var(--danger)', banner: true, bannerBg: 'var(--danger-bg)', bannerBorder: 'rgba(243,139,168,.3)', bannerText: 'YOLO — All tools allowed, no limits (--dangerously-allow-all-tools)' },
 }
 function cyclePermissionMode() {
-  const order = ['default', 'plan', 'auto-accept']
+  const order = ['default', 'plan', 'auto-accept', 'yolo']
   const idx = (order.indexOf(permissionMode) + 1) % order.length
   setPermissionMode(order[idx])
 }
@@ -1019,6 +1036,7 @@ async function init() {
   }
 
   if (!restored) createNewTab()
+  if (currentProject) loadGitStatus()
 }
 
 function getProjectTabInfo(projectPath) {
@@ -1891,27 +1909,34 @@ async function loadGitStatus() {
       return
     }
 
+    const branchCount = data.branches ? data.branches.length : 0
     let html = ''
-    // ブランチ + 未プッシュ
-    html += `<div class="git-branch">${ic('git-branch', 16)} <span style="font-size:14px;font-family:var(--font-mono);font-weight:600">${esc(data.branch)}</span>`
-    if (data.unpushed > 0) {
-      html += ` <span style="margin-left:auto;background:var(--warning-bg);color:var(--warning);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">${data.unpushed} unpushed</span>`
-    }
-    html += '</div>'
+    // ブランチ + 未プッシュ（複数ブランチ時はタップで一覧開閉）
+    const hasMultiple = branchCount > 1
+    html += `<div class="git-branch" ${hasMultiple ? 'onclick="toggleBranchList()" style="cursor:pointer"' : ''}>
+      ${ic('git-branch', 16)}
+      <span style="font-size:14px;font-family:var(--font-mono);font-weight:600">${esc(data.branch)}</span>
+      ${hasMultiple ? `<span style="font-size:11px;color:var(--muted);margin-left:2px">(${branchCount})</span>` : ''}
+      ${data.unpushed > 0 ? `<span style="margin-left:auto;background:var(--warning-bg);color:var(--warning);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">${data.unpushed} unpushed</span>` : ''}
+      ${hasMultiple ? `<span id="branchChevron" style="${data.unpushed > 0 ? '' : 'margin-left:auto;'}color:var(--muted);display:flex;transition:transform .2s">${ic('chevron-down', 14)}</span>` : ''}
+    </div>`
 
-    // ブランチ一覧（読み取り専用）
-    if (data.branches && data.branches.length > 1) {
-      html += `<div style="margin-bottom:8px">`
-      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Branches</div>`
-      html += `<div style="display:flex;gap:4px;flex-wrap:wrap">`
+    // ブランチ一覧（デフォルト非表示・タップで開閉）
+    if (hasMultiple) {
+      html += `<div id="branchList" style="display:none;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">`
       data.branches.forEach(b => {
         if (b.current) {
-          html += `<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-family:var(--font-mono);background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-border);font-weight:600">${esc(b.name)}</span>`
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-dim);border-left:3px solid var(--accent)">
+            <span style="font-size:13px;font-family:var(--font-mono);color:var(--accent);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
+            <span style="margin-left:auto;font-size:10px;color:var(--accent);opacity:.8;flex-shrink:0">current</span>
+          </div>`
         } else {
-          html += `<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-family:var(--font-mono);background:var(--surface);color:var(--muted);border:1px solid var(--border)">${esc(b.name)}</span>`
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-left:3px solid transparent;border-top:1px solid var(--border)">
+            <span style="font-size:13px;font-family:var(--font-mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
+          </div>`
         }
       })
-      html += `</div></div>`
+      html += `</div>`
     }
 
     // GitHub リンク
@@ -1942,9 +1967,36 @@ async function loadGitStatus() {
     }
 
     container.innerHTML = html
+    updateGitBar(data)
   } catch (e) {
     container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Failed to load Git status</div>`
   }
+}
+
+function toggleBranchList() {
+  const list = document.getElementById('branchList')
+  const chevron = document.getElementById('branchChevron')
+  if (!list) return
+  const open = list.style.display === 'none'
+  list.style.display = open ? 'block' : 'none'
+  if (chevron) chevron.style.transform = open ? 'rotate(180deg)' : ''
+}
+
+function updateGitBar(data) {
+  const branchEl = document.getElementById('gitBarBranch')
+  const rightEl = document.getElementById('gitBarRight')
+  if (!branchEl || !rightEl) return
+  branchEl.style.opacity = '1'
+  branchEl.innerHTML = ic('git-branch', 13) + ' ' + esc(data.branch || '—')
+  let right = ''
+  const changed = data.files ? data.files.length : 0
+  if (changed > 0) {
+    right += `<div class="git-statusbar-pill" style="color:var(--accent)">${ic('source-control', 12)} ${changed}</div>`
+  }
+  if (data.unpushed > 0) {
+    right += `<div class="git-statusbar-pill warn">${ic('arrow-up', 12)} ${data.unpushed}</div>`
+  }
+  rightEl.innerHTML = right
 }
 
 init()
