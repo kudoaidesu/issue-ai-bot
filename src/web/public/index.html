@@ -37,7 +37,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:2;stroke-linecap:ro
 .header-btn svg.ic{font-size:14px}
 .model-select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font-mono);cursor:pointer;min-width:0;flex-shrink:1}
 .model-select:focus{outline:none;border-color:var(--accent)}
-.upload-menu{display:none;position:absolute;bottom:100%;left:40px;margin-bottom:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.upload-menu{display:none;position:absolute;bottom:calc(100% - 8px);left:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .upload-menu.active{display:flex;flex-direction:column;gap:2px}
 .upload-menu button{display:flex;align-items:center;gap:8px;padding:8px 14px;background:none;border:none;color:var(--text);font-size:13px;font-family:var(--font-mono);cursor:pointer;border-radius:6px;white-space:nowrap}
 .upload-menu button:hover{background:var(--surface-hover)}
@@ -261,16 +261,16 @@ pre:hover .code-copy-btn{opacity:1}
 
 <div class="input-area" style="position:relative">
   <div class="cmd-menu" id="cmdMenu"></div>
+  <div class="upload-menu" id="uploadMenu">
+    <button onclick="doUpload('file')"><span class="upload-menu-icon" id="umFileIcon"></span> File</button>
+    <button onclick="doUpload('image')"><span class="upload-menu-icon" id="umImageIcon"></span> Image</button>
+  </div>
+  <input type="file" id="fileInput" multiple style="display:none">
   <div class="input-box">
     <textarea id="input" rows="1" placeholder="Ask Claude anything..." enterkeyhint="send"></textarea>
     <div class="input-footer">
       <button id="cmdBtn" onclick="toggleCmdMenu()" title="Commands (/)"></button>
       <button id="filesBtn" onclick="showUploadMenu()" title="Upload file"></button>
-      <input type="file" id="fileInput" multiple style="display:none">
-      <div class="upload-menu" id="uploadMenu">
-        <button onclick="doUpload('file')"><span class="upload-menu-icon" id="umFileIcon"></span> File</button>
-        <button onclick="doUpload('image')"><span class="upload-menu-icon" id="umImageIcon"></span> Image</button>
-      </div>
       <select id="model" class="model-select">
         <option value="default">default (auto)</option>
         <option value="claude-sonnet-4-6" selected>claude-sonnet-4-6</option>
