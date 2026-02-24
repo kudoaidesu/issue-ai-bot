@@ -146,8 +146,10 @@ pre:hover .code-copy-btn{opacity:1}
 
 /* ── 入力エリア ── */
 .input-area{border-top:1px solid var(--border);background:var(--surface);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));flex-shrink:0}
-.input-box{border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden;transition:border-color .15s}
-.input-box:focus-within{border-color:var(--accent-border)}
+.input-box{border:2px solid var(--mode-color, var(--border));border-radius:10px;background:var(--bg);overflow:hidden;transition:border-color .15s}
+.input-box:focus-within{border-color:var(--mode-color, var(--accent-border))}
+.input-box.streaming{animation:pulse-border 1.5s ease-in-out infinite}
+@keyframes pulse-border{0%,100%{border-color:var(--mode-color, var(--border))}50%{border-color:transparent}}
 .input-box textarea{width:100%;background:transparent;color:var(--text);border:none;padding:10px 14px;font-size:14px;font-family:var(--font-sans);resize:none;min-height:40px;max-height:150px;line-height:1.4}
 .input-box textarea:focus{outline:none}
 .input-box textarea::placeholder{color:var(--muted)}
@@ -158,7 +160,7 @@ pre:hover .code-copy-btn{opacity:1}
 .input-footer button.send-btn{background:var(--accent);color:#1e1e2e;border-radius:8px;width:42px;height:42px;font-size:18px}
 .input-footer button.send-btn:hover{opacity:.9}
 .input-footer button.send-btn:disabled{opacity:.3}
-.input-footer button.abort-btn{display:none;background:var(--danger-bg);color:var(--danger)}
+.input-footer button.abort-btn{display:none;background:var(--danger-bg);color:var(--danger);width:42px;height:42px;border-radius:8px;font-size:18px}
 .input-footer button.abort-btn:hover{background:rgba(243,139,168,.2)}
 .attachments{display:none;flex-wrap:wrap;gap:6px;padding:8px 10px 4px}
 .attachments:not(:empty){display:flex}
@@ -237,6 +239,13 @@ pre:hover .code-copy-btn{opacity:1}
 .service-item .port-badge{background:var(--accent-dim);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;font-family:var(--font-mono)}
 .service-item .open-btn{margin-left:auto;background:var(--accent);color:#1e1e2e;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--font-mono);white-space:nowrap}
 .service-item .open-btn:hover{opacity:.9}
+.link-item{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .1s;-webkit-tap-highlight-color:transparent}
+.link-item:hover,.link-item:active{border-color:var(--border-light);background:var(--surface-hover)}
+.link-item .link-info{flex:1;min-width:0}
+.link-item .link-title{font-size:13px;color:var(--text-bright);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-item .link-url{font-size:11px;color:var(--muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-item .link-delete{color:var(--muted);background:none;border:none;cursor:pointer;padding:6px;border-radius:4px;display:flex;align-items:center;flex-shrink:0;transition:color .1s}
+.link-item .link-delete:hover{color:var(--danger)}
 
 /* ── レスポンシブ ── */
 @media(max-width:480px){
@@ -344,6 +353,7 @@ pre:hover .code-copy-btn{opacity:1}
       <button class="drawer-tab" data-tab="git" onclick="switchDrawerTab('git')">Git</button>
       <button class="drawer-tab" data-tab="services" onclick="switchDrawerTab('services')">Services</button>
       <button class="drawer-tab" data-tab="tools" onclick="switchDrawerTab('tools')">Tools</button>
+      <button class="drawer-tab" data-tab="links" onclick="switchDrawerTab('links')">Links</button>
       <button class="drawer-tab" data-tab="projects" onclick="switchDrawerTab('projects')">Projects</button>
     </div>
     <div id="sessionsTab" class="drawer-tab-content active">
@@ -385,6 +395,21 @@ pre:hover .code-copy-btn{opacity:1}
     </div>
     <div id="toolsTab" class="drawer-tab-content">
       <div id="toolsList"></div>
+    </div>
+    <div id="linksTab" class="drawer-tab-content">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;color:var(--muted)">Bookmarks</span>
+        <button onclick="showAddLinkForm()" style="background:none;border:1px solid var(--border);color:var(--accent);font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--font-mono)">+ Add</button>
+      </div>
+      <div id="addLinkForm" style="display:none;margin-bottom:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+        <input id="addLinkUrl" type="url" placeholder="https://example.com" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font-mono);margin-bottom:6px" />
+        <input id="addLinkTitle" type="text" placeholder="Title (optional)" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font-mono);margin-bottom:6px" />
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+          <button onclick="hideAddLinkForm()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer">Cancel</button>
+          <button onclick="addLink()" style="background:var(--accent);border:none;color:#fff;font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer">Add</button>
+        </div>
+      </div>
+      <div id="linksList"></div>
     </div>
   </div>
 </div>
@@ -534,6 +559,8 @@ function restoreProjectTabs(projectPath) {
         sessionId: saved.sessionId,
         streamId: null,
         sending: false,
+        fetchController: null,
+        sendingPromise: null,
         messagesEl,
         fullTexts: new WeakMap(),
         label: saved.label || 'New Chat',
@@ -594,12 +621,15 @@ function switchProjectTabs(newProjectPath) {
 
   // 既存タブのDOMを全削除
   tabs.forEach((tab) => {
-    if (tab.sending && tab.streamId) {
-      fetch('/api/chat/abort', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ streamId: tab.streamId }),
-      }).catch(() => {})
+    if (tab.sending) {
+      if (tab.fetchController) tab.fetchController.abort()
+      if (tab.streamId) {
+        fetch('/api/chat/abort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ streamId: tab.streamId }),
+        }).catch(() => {})
+      }
     }
     tab.messagesEl.remove()
   })
@@ -652,9 +682,9 @@ function copyCode(btn) {
 // 4 states: 'default' → 'plan' → 'auto-accept' → 'yolo' → 'default'
 let permissionMode = 'default'
 const PERM_MODES = {
-  'default':     { label: 'Default', icon: 'shield', color: 'var(--muted)', banner: false },
-  'plan':        { label: 'Plan', icon: 'map-pin', color: 'var(--accent)', banner: true, bannerBg: 'var(--accent-dim)', bannerBorder: 'var(--accent-border)', bannerText: 'Claude will plan before acting' },
-  'auto-accept': { label: 'Auto', icon: 'zap', color: 'var(--warning)', banner: true, bannerBg: 'var(--warning-bg)', bannerBorder: 'rgba(249,226,175,.15)', bannerText: 'Auto-accept — Claude will act without asking' },
+  'default':     { label: 'Default', icon: 'shield', color: 'var(--border)', banner: false },
+  'plan':        { label: 'Plan', icon: 'map-pin', color: '#007acc', banner: true, bannerBg: 'rgba(0,122,204,.1)', bannerBorder: 'rgba(0,122,204,.3)', bannerText: 'Claude will plan before acting' },
+  'auto-accept': { label: 'Auto', icon: 'zap', color: 'var(--text)', banner: true, bannerBg: 'rgba(205,214,230,.08)', bannerBorder: 'rgba(205,214,230,.2)', bannerText: 'Auto-accept — Claude will act without asking' },
   'yolo':        { label: 'YOLO', icon: 'alert-triangle', color: 'var(--danger)', banner: true, bannerBg: 'var(--danger-bg)', bannerBorder: 'rgba(243,139,168,.3)', bannerText: 'YOLO — All tools allowed, no limits (--dangerously-allow-all-tools)' },
 }
 function cyclePermissionMode() {
@@ -682,6 +712,7 @@ function setPermissionMode(mode) {
     banner.innerHTML = ''
     banner.style = ''
   }
+  updateInputBoxModeColor()
 }
 // backward compat
 function togglePlanMode() { cyclePermissionMode() }
@@ -1039,6 +1070,8 @@ function createNewTab(label) {
     sessionId: null,
     streamId: null,
     sending: false,
+    fetchController: null,
+    sendingPromise: null,
     messagesEl,
     fullTexts: new WeakMap(),
     label: label || 'New Chat',
@@ -1067,12 +1100,15 @@ function switchTab(tabId) {
 function closeTab(tabId) {
   const tab = tabs.get(tabId)
   if (!tab) return
-  if (tab.sending && tab.streamId) {
-    fetch('/api/chat/abort', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ streamId: tab.streamId }),
-    }).catch(() => {})
+  if (tab.sending) {
+    if (tab.fetchController) tab.fetchController.abort()
+    if (tab.streamId) {
+      fetch('/api/chat/abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ streamId: tab.streamId }),
+      }).catch(() => {})
+    }
   }
   tab.messagesEl.remove()
   tabs.delete(tabId)
@@ -1118,19 +1154,33 @@ function updateTabLabel(tabId, label) {
 
 // --- ストリーミングUI ---
 function updateStreamingUI(streaming) {
-  sendBtn.disabled = streaming
-  sendBtn.style.display = streaming ? 'none' : 'flex'
+  sendBtn.style.display = 'flex'
+  sendBtn.disabled = false
   abortBtn.style.display = streaming ? 'flex' : 'none'
+  const box = document.querySelector('.input-box')
+  box.classList.toggle('streaming', streaming)
+}
+
+function updateInputBoxModeColor() {
+  const cfg = PERM_MODES[permissionMode]
+  document.querySelector('.input-box').style.setProperty('--mode-color', cfg.color)
 }
 
 function abortCurrentTab() {
   const tab = tabs.get(activeTabId)
-  if (!tab || !tab.streamId) return
-  fetch('/api/chat/abort', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ streamId: tab.streamId }),
-  }).catch(e => console.error('Abort failed:', e))
+  if (!tab || !tab.sending) return
+  // クライアント側のfetchを即座に中断
+  if (tab.fetchController) {
+    tab.fetchController.abort()
+  }
+  // サーバー側のAgent SDKストリームも中断
+  if (tab.streamId) {
+    fetch('/api/chat/abort', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ streamId: tab.streamId }),
+    }).catch(e => console.error('Abort failed:', e))
+  }
 }
 
 // --- 初期化 ---
@@ -1160,6 +1210,7 @@ async function init() {
 
   if (!restored) createNewTab()
   if (currentProject) loadGitStatus()
+  updateInputBoxModeColor()
 }
 
 function getProjectTabInfo(projectPath) {
@@ -1279,7 +1330,7 @@ function closeDrawer() { document.getElementById('drawer').classList.remove('ope
 
 function switchDrawerTab(tab) {
   document.querySelectorAll('.drawer-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab))
-  ;['sessions', 'projects', 'files', 'git', 'services', 'tools'].forEach(id => {
+  ;['sessions', 'projects', 'files', 'git', 'services', 'tools', 'links'].forEach(id => {
     const el = document.getElementById(id + 'Tab')
     if (el) el.classList.toggle('active', tab === id)
   })
@@ -1289,6 +1340,7 @@ function switchDrawerTab(tab) {
   if (tab === 'git') loadGitStatus()
   if (tab === 'services') loadServices()
   if (tab === 'tools') loadTools()
+  if (tab === 'links') loadLinks()
 }
 
 // --- セッション履歴 ---
@@ -1481,9 +1533,30 @@ async function sendMessage() {
   if (!activeTabId || !tabs.has(activeTabId)) return
 
   const tab = tabs.get(activeTabId)
-  if (tab.sending) return
+
+  // 処理中なら中断してから送信（前のストリームを完全に停止してから新しいリクエストを開始）
+  if (tab.sending) {
+    // クライアント側のfetchを即座に中断（reader.read()がAbortErrorをthrow → ループ終了）
+    if (tab.fetchController) {
+      tab.fetchController.abort()
+    }
+    // サーバー側のAgent SDKストリームも中断
+    if (tab.streamId) {
+      fetch('/api/chat/abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ streamId: tab.streamId }),
+      }).catch(() => {})
+    }
+    // 前のsendMessage()が完全に終了するのを待つ
+    if (tab.sendingPromise) {
+      await tab.sendingPromise
+    }
+  }
 
   tab.sending = true
+  const fetchController = new AbortController()
+  tab.fetchController = fetchController
   updateStreamingUI(true)
   renderTabs()
   inputEl.value = ''
@@ -1499,17 +1572,22 @@ async function sendMessage() {
   const content = assistantEl.querySelector('.content')
   content.innerHTML = '<div class="typing"><div class="typing-dots"><span></span><span></span><span></span></div></div>'
 
+  // sendingPromiseを設定（割り込み時に前の処理完了を待てるようにする）
+  let resolveSending
+  tab.sendingPromise = new Promise(r => { resolveSending = r })
+
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+      body: JSON.stringify({
         message: text,
         project: currentProject,
         sessionId: tab.sessionId,
         model: document.getElementById('model').value,
         permissionMode,
       }),
+      signal: fetchController.signal,
     })
 
     const reader = res.body.getReader()
@@ -1539,11 +1617,16 @@ async function sendMessage() {
       }
     }
   } catch (e) {
-    content.innerHTML = `<span style="color:var(--danger)" data-testid="error-message">Error: ${esc(e.message)}</span>`
+    // AbortError は割り込み中断なのでエラー表示しない
+    if (e.name !== 'AbortError') {
+      content.innerHTML = `<span style="color:var(--danger)" data-testid="error-message">Error: ${esc(e.message)}</span>`
+    }
   }
 
   tab.sending = false
   tab.streamId = null
+  tab.fetchController = null
+  resolveSending()
   if (activeTabId === tabId) updateStreamingUI(false)
   renderTabs()
   scrollToBottom(tabId)
@@ -1927,6 +2010,84 @@ async function loadServices() {
   } catch (e) {
     container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Error: ${esc(String(e))}</div>`
   }
+}
+
+// =====================================================
+// Links (ブックマーク)
+// =====================================================
+const LINKS_STORAGE_KEY = 'claude-crew-links'
+const DEFAULT_LINKS = [
+  { title: 'Claude Usage', url: 'https://claude.ai/settings/usage' },
+  { title: 'ChatGPT Codex Usage', url: 'https://chatgpt.com/codex/settings/usage' },
+]
+
+function getLinks() {
+  try {
+    const raw = localStorage.getItem(LINKS_STORAGE_KEY)
+    if (!raw) return [...DEFAULT_LINKS]
+    return JSON.parse(raw)
+  } catch { return [...DEFAULT_LINKS] }
+}
+
+function saveLinksData(links) {
+  localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(links))
+}
+
+function loadLinks() {
+  const container = document.getElementById('linksList')
+  const links = getLinks()
+  container.innerHTML = ''
+  if (links.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">No links yet</div>'
+    return
+  }
+  links.forEach((link, idx) => {
+    const el = document.createElement('div')
+    el.className = 'link-item'
+    const hostname = (() => { try { return new URL(link.url).hostname } catch { return link.url } })()
+    el.innerHTML = `
+      <div style="color:var(--accent);display:flex;align-items:center;flex-shrink:0">${ic('external-link', 16)}</div>
+      <div class="link-info">
+        <div class="link-title">${esc(link.title || hostname)}</div>
+        <div class="link-url">${esc(link.url)}</div>
+      </div>
+      <button class="link-delete" onclick="event.stopPropagation();removeLink(${idx})" title="Delete">${ic('x', 14)}</button>
+    `
+    el.onclick = () => window.open(link.url, '_blank')
+    container.appendChild(el)
+  })
+}
+
+function showAddLinkForm() {
+  document.getElementById('addLinkForm').style.display = 'block'
+  document.getElementById('addLinkUrl').focus()
+}
+
+function hideAddLinkForm() {
+  document.getElementById('addLinkForm').style.display = 'none'
+  document.getElementById('addLinkUrl').value = ''
+  document.getElementById('addLinkTitle').value = ''
+}
+
+function addLink() {
+  const url = document.getElementById('addLinkUrl').value.trim()
+  if (!url) return
+  let title = document.getElementById('addLinkTitle').value.trim()
+  if (!title) {
+    try { title = new URL(url).hostname } catch { title = url }
+  }
+  const links = getLinks()
+  links.push({ title, url })
+  saveLinksData(links)
+  hideAddLinkForm()
+  loadLinks()
+}
+
+function removeLink(idx) {
+  const links = getLinks()
+  links.splice(idx, 1)
+  saveLinksData(links)
+  loadLinks()
 }
 
 // =====================================================
