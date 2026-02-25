@@ -653,9 +653,15 @@ const renderer = new marked.Renderer()
 renderer.code = function({ text, lang }) {
   const langLabel = lang ? esc(lang) : ''
   const escaped = esc(text)
-  return `<pre><button class="code-copy-btn" onclick="copyCode(this)" data-testid="code-copy-btn">Copy</button><code class="language-${langLabel}">${escaped}</code></pre>`
+  return `<pre><button class="code-copy-btn" data-testid="code-copy-btn">Copy</button><code class="language-${langLabel}">${escaped}</code></pre>`
 }
 marked.setOptions({ renderer, breaks: true })
+
+// コードコピーボタン: イベント委譲（動的生成されるボタンに対応）
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.code-copy-btn')
+  if (btn) copyCode(btn)
+})
 
 // --- コードコピー ---
 function copyCode(btn) {
@@ -681,8 +687,8 @@ function copyCode(btn) {
 // --- モデル選択（ヘッダーのselectのみで管理） ---
 
 // --- Permission Mode ---
-// 4 states: 'default' → 'plan' → 'auto-accept' → 'yolo' → 'default'
-let permissionMode = 'default'
+// 4 states: 'plan' → 'default' → 'auto-accept' → 'yolo' → 'plan'
+let permissionMode = 'plan'
 const PERM_MODES = {
   'default':     { label: 'Default', icon: 'shield', color: 'var(--border)', banner: false },
   'plan':        { label: 'Plan', icon: 'map-pin', color: '#007acc', banner: true, bannerBg: 'rgba(0,122,204,.1)', bannerBorder: 'rgba(0,122,204,.3)', bannerText: 'Claude will plan before acting' },
@@ -690,7 +696,7 @@ const PERM_MODES = {
   'yolo':        { label: 'YOLO', icon: 'alert-triangle', color: 'var(--danger)', banner: true, bannerBg: 'var(--danger-bg)', bannerBorder: 'rgba(243,139,168,.3)', bannerText: 'YOLO — All tools allowed, no limits (--dangerously-allow-all-tools)' },
 }
 function cyclePermissionMode() {
-  const order = ['default', 'plan', 'auto-accept', 'yolo']
+  const order = ['plan', 'default', 'auto-accept', 'yolo']
   const idx = (order.indexOf(permissionMode) + 1) % order.length
   setPermissionMode(order[idx])
 }
@@ -913,10 +919,18 @@ function closeCmdMenu() {
 function renderCmdMenu(filter = '') {
   const menu = document.getElementById('cmdMenu')
   const filtered = CMD_ITEMS.map((c, i) => ({ ...c, idx: i })).filter(c => !filter || c.name.slice(1).startsWith(filter))
-  menu.innerHTML = filtered.map(c =>
-    `<div class="cmd-item" onclick="execCmd(${c.idx})">${ic(c.icon, 15)} <span class="cmd-name">${c.name}</span> <span class="cmd-desc">${c.desc}</span></div>`
-  ).join('')
-  if (filtered.length === 0) menu.innerHTML = '<div class="cmd-item" style="color:var(--muted)">No matching commands</div>'
+  menu.innerHTML = ''
+  if (filtered.length === 0) {
+    menu.innerHTML = '<div class="cmd-item" style="color:var(--muted)">No matching commands</div>'
+    return
+  }
+  for (const c of filtered) {
+    const div = document.createElement('div')
+    div.className = 'cmd-item'
+    div.innerHTML = `${ic(c.icon, 15)} <span class="cmd-name">${c.name}</span> <span class="cmd-desc">${c.desc}</span>`
+    div.addEventListener('click', () => execCmd(c.idx))
+    menu.appendChild(div)
+  }
 }
 function execCmd(idx) {
   closeCmdMenu()
@@ -1203,8 +1217,16 @@ function renderTabs() {
     let inner = ''
     if (tab.sending) inner += '<span class="tab-streaming"></span>'
     inner += `<span class="tab-label">${esc(tab.label)}</span>`
-    if (tabs.size > 1) inner += `<span class="tab-close" onclick="closeTab('${tabId}')">${ic('x', 11)}</span>`
-    el.innerHTML = inner
+    if (tabs.size > 1) {
+      const closeSpan = document.createElement('span')
+      closeSpan.className = 'tab-close'
+      closeSpan.innerHTML = ic('x', 11)
+      closeSpan.addEventListener('click', (e) => { e.stopPropagation(); closeTab(tabId) })
+      el.innerHTML = inner
+      el.appendChild(closeSpan)
+    } else {
+      el.innerHTML = inner
+    }
     tabBar.insertBefore(el, addBtn)
   })
 }
@@ -1275,7 +1297,8 @@ async function init() {
     console.error('Failed to load projects:', e)
   }
 
-  if (!restored) createNewTab()
+  // selectProject が呼ばれていない（= タブが未作成）場合のみ新規タブ作成
+  if (!restored && tabs.size === 0) createNewTab()
   if (currentProject) loadGitStatus()
   updateInputBoxModeColor()
 }
@@ -1310,10 +1333,14 @@ function renderProjectList(projects) {
     }
     let deleteBtn = ''
     if (p.source === 'manual') {
-      deleteBtn = `<button class="project-delete" onclick="event.stopPropagation();deleteProject('${esc(p.localPath)}')" title="Remove">&times;</button>`
+      deleteBtn = `<button class="project-delete" data-delete-path="${esc(p.localPath)}" title="Remove">&times;</button>`
     }
     el.innerHTML = `<div style="display:flex;align-items:center"><span class="name">${esc(p.slug)}</span>${badge}${deleteBtn}</div><span class="path">${esc(p.localPath)}</span>`
-    el.onclick = () => { selectProject(p) }
+    el.addEventListener('click', () => { selectProject(p) })
+    const delBtn = el.querySelector('[data-delete-path]')
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteProject(p.localPath) })
+    }
     list.appendChild(el)
   })
 }
@@ -1465,12 +1492,22 @@ function renderSessionList(list, total, append) {
     const timeStr = timeAgo(s.lastUsed)
     const statusLabel = openTabId ? '<span style="color:var(--accent);font-size:10px">OPEN</span>' : ''
     el.innerHTML = `
-      <span class="preview">${esc(s.messagePreview || s.sessionId)} ${statusLabel}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="preview" style="flex:1">${esc(s.messagePreview || s.sessionId)} ${statusLabel}</span>
+        <button class="delete-session" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;flex-shrink:0" title="Delete">&times;</button>
+      </div>
       <div class="session-meta">
         <span>${timeStr}</span>
       </div>
     `
-    el.onclick = () => { resumeSession(s); closeDrawer() }
+    el.querySelector('.delete-session').addEventListener('click', async (e) => {
+      e.stopPropagation()
+      try {
+        await fetch('/api/chat/sessions/' + encodeURIComponent(s.sessionId.slice(0, 12)), { method: 'DELETE' })
+        el.remove()
+      } catch { /* ignore */ }
+    })
+    el.addEventListener('click', () => { resumeSession(s); closeDrawer() })
     container.appendChild(el)
   })
 
@@ -1768,6 +1805,13 @@ function handleSSE(tabId, event, data, content, msgEl) {
       warn.innerHTML = `${ic('alert-triangle', 14)} <strong>${esc(w.label)}</strong> ${esc(w.command)}`
       content.appendChild(warn)
       scrollToBottom(tabId)
+    } catch {}
+  }
+
+  if (event === 'stream-start') {
+    try {
+      const s = JSON.parse(data)
+      if (s.streamId) tab.streamId = s.streamId
     } catch {}
   }
 
@@ -2076,8 +2120,9 @@ async function loadServices() {
       el.innerHTML = `
         <span class="port-badge">:${p.port}</span>
         <span style="font-size:13px;color:var(--text);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis">${esc(p.command)} (PID ${p.pid})</span>
-        <button class="open-btn" onclick="event.stopPropagation();window.open('${url}','_blank')">Open ${ic('external-link', 12)}</button>
+        <button class="open-btn">Open ${ic('external-link', 12)}</button>
       `
+      el.querySelector('.open-btn').addEventListener('click', (e) => { e.stopPropagation(); window.open(url, '_blank') })
       container.appendChild(el)
     })
 
@@ -2142,9 +2187,10 @@ function loadLinks() {
         <div class="link-title">${esc(link.title || hostname)}</div>
         <div class="link-url">${esc(link.url)}</div>
       </div>
-      <button class="link-delete" onclick="event.stopPropagation();removeLink(${idx})" title="Delete">${ic('x', 14)}</button>
+      <button class="link-delete" title="Delete">${ic('x', 14)}</button>
     `
-    el.onclick = () => window.open(link.url, '_blank')
+    el.querySelector('.link-delete').addEventListener('click', (e) => { e.stopPropagation(); removeLink(idx) })
+    el.addEventListener('click', () => window.open(link.url, '_blank'))
     container.appendChild(el)
   })
 }
@@ -2357,7 +2403,7 @@ async function loadGitStatus() {
     let html = ''
     // ブランチ + 未プッシュ（複数ブランチ時はタップで一覧開閉）
     const hasMultiple = branchCount > 1
-    html += `<div class="git-branch" ${hasMultiple ? 'onclick="toggleBranchList()" style="cursor:pointer"' : ''}>
+    html += `<div class="git-branch" ${hasMultiple ? 'data-toggle-branches style="cursor:pointer"' : ''}>
       ${ic('git-branch', 16)}
       <span style="font-size:14px;font-family:var(--font-mono);font-weight:600">${esc(data.branch)}</span>
       ${hasMultiple ? `<span style="font-size:11px;color:var(--muted);margin-left:2px">(${branchCount})</span>` : ''}
@@ -2411,6 +2457,9 @@ async function loadGitStatus() {
     }
 
     container.innerHTML = html
+    // ブランチ一覧の開閉ボタンにイベントリスナーを追加
+    const branchToggle = container.querySelector('[data-toggle-branches]')
+    if (branchToggle) branchToggle.addEventListener('click', () => toggleBranchList())
     updateGitBar(data)
   } catch (e) {
     container.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Failed to load Git status</div>`

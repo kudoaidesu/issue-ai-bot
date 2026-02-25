@@ -43,8 +43,11 @@ export function sanitizePromptInput(text: string): string {
 
   for (const pattern of INJECTION_PATTERNS) {
     sanitized = sanitized.replace(pattern, (match) => {
-      // パターンを無害化: コロンを全角に置換
-      return match.replace(/:/g, '\uff1a')
+      // パターンを無害化: コロンを全角に、HTML括弧を全角に置換
+      return match
+        .replace(/:/g, '\uff1a')
+        .replace(/</g, '\uff1c')
+        .replace(/>/g, '\uff1e')
     })
   }
 

@@ -41,9 +41,12 @@ const mockProjects = [
 app.get('/api/projects', (c) => c.json(mockProjects))
 
 app.get('/api/chat/sessions', (c) => {
+  const offset = parseInt(c.req.query('offset') || '0', 10)
+  const limit = parseInt(c.req.query('limit') || '20', 10)
   const list = Array.from(mockSessions.values())
     .sort((a, b) => b.lastUsed - a.lastUsed)
-  return c.json(list)
+  const page = list.slice(offset, offset + limit)
+  return c.json({ items: page, total: list.length, offset, limit })
 })
 
 app.delete('/api/chat/sessions/:id', (c) => {
@@ -108,7 +111,8 @@ app.post('/api/chat', async (c) => {
 function buildMockEvents(message: string, sessionId: string, streamId: string): string[] {
   const events: string[] = []
 
-  // セッション通知
+  // streamId通知 + セッション通知
+  events.push(sseEvent('stream-start', JSON.stringify({ streamId })))
   events.push(sseEvent('session', JSON.stringify({ sessionId, streamId })))
 
   if (message.includes('tool-test')) {

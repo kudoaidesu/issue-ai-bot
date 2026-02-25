@@ -2,7 +2,10 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Web UI', () => {
   test.beforeEach(async ({ page }) => {
+    // localStorage をクリアして前のテストのタブ状態を引き継がない
     await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await page.reload()
     // プロジェクト一覧の読み込みを待つ
     await page.waitForFunction(() => {
       const title = document.getElementById('title')
@@ -196,12 +199,13 @@ test.describe('Web UI', () => {
       await page.locator('#send').click()
       await page.locator('[data-testid="result-meta"]').first().waitFor({ timeout: 5000 })
 
-      // セッションドロワーを開く
-      await page.locator('#historyBtn').click()
+      // メニューボタンでドロワーを開く
+      await page.locator('#menuBtn').click()
       await expect(page.locator('#drawer')).toHaveClass(/open/)
 
-      // Sessions タブが表示
+      // Sessions タブをクリック
       const sessionsTab = page.locator('.drawer-tab[data-tab="sessions"]')
+      await sessionsTab.click()
       await expect(sessionsTab).toHaveClass(/active/)
 
       // セッションアイテムが存在
@@ -216,15 +220,16 @@ test.describe('Web UI', () => {
       await page.locator('#send').click()
       await page.locator('[data-testid="result-meta"]').first().waitFor({ timeout: 5000 })
 
-      // セッションドロワーを開く
-      await page.locator('#historyBtn').click()
+      // メニューボタンでドロワーを開く
+      await page.locator('#menuBtn').click()
+      // Sessions タブをクリック
+      await page.locator('.drawer-tab[data-tab="sessions"]').click()
       await page.locator('[data-testid="session-item"]').first().waitFor({ timeout: 5000 })
 
       // 削除
       await page.locator('.delete-session').first().click()
 
       // 削除後にリストが更新される（空になるか、対象が消える）
-      // ネットワークリクエストが完了するのを待つ
       await page.waitForTimeout(500)
     })
   })
@@ -286,8 +291,8 @@ test.describe('Web UI', () => {
 
   test.describe('プロジェクト切り替え', () => {
     test('プロジェクトドロワーにプロジェクト一覧が表示される', async ({ page }) => {
-      // フォルダボタンを開く
-      await page.locator('#projectsBtn').click()
+      // メニューボタンでドロワーを開く
+      await page.locator('#menuBtn').click()
       await expect(page.locator('#drawer')).toHaveClass(/open/)
 
       // Projects タブをクリック
@@ -301,7 +306,7 @@ test.describe('Web UI', () => {
     })
 
     test('プロジェクトを切り替えるとタイトルが変わる', async ({ page }) => {
-      await page.locator('#projectsBtn').click()
+      await page.locator('#menuBtn').click()
       await page.locator('.drawer-tab[data-tab="projects"]').click()
       await page.locator('.project-item').nth(1).click()
 

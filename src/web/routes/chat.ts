@@ -12,6 +12,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { createChatStream, abortStream } from '../services/chat-service.js'
+import { validateInput } from '../../utils/sanitize.js'
+import { isValidSessionId, isProjectPathAllowed } from '../path-guard.js'
 import { createLogger } from '../../utils/logger.js'
 
 const log = createLogger('web:chat')
@@ -255,7 +257,17 @@ chatRoutes.post('/', async (c) => {
     return c.json({ error: 'message or images required' }, 400)
   }
 
+  // 入力バリデーション
+  const validation = validateInput(body.message || '')
+  const sanitizedMessage = validation.sanitized || body.message || ''
+
   const cwd = body.project || process.cwd()
+
+  // プロジェクトパスのバウンダリチェック
+  if (body.project && !isProjectPathAllowed(body.project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   const model = body.model || 'sonnet'
 
   return streamSSE(c, async (stream) => {
@@ -263,7 +275,7 @@ chatRoutes.post('/', async (c) => {
 
     try {
       const chatStream = createChatStream({
-        message: body.message,
+        message: sanitizedMessage,
         cwd,
         model,
         sessionId: body.sessionId,
@@ -276,6 +288,14 @@ chatRoutes.post('/', async (c) => {
 
       for await (const event of chatStream) {
         switch (event.type) {
+          case 'stream-start':
+            currentStreamId = event.streamId
+            streamToSession.set(currentStreamId, lastSessionId)
+            await stream.writeSSE({
+              event: 'stream-start',
+              data: JSON.stringify({ streamId: currentStreamId }),
+            })
+            break
           case 'session':
             if (event.sessionId) {
               lastSessionId = event.sessionId
@@ -395,6 +415,11 @@ chatRoutes.get('/sessions', (c) => {
   const offset = parseInt(c.req.query('offset') || '0', 10)
   const limit = parseInt(c.req.query('limit') || '20', 10)
 
+  // プロジェクトパスのバウンダリチェック
+  if (project && !isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   const all = getMergedSessions(project)
   const page = all.slice(offset, offset + limit)
   return c.json({ items: page, total: all.length, offset, limit })
@@ -407,6 +432,16 @@ chatRoutes.get('/history/:sessionId', async (c) => {
 
   if (!sessionId || !project) {
     return c.json({ messages: [] })
+  }
+
+  // プロジェクトパスのバウンダリチェック
+  if (!isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
+  // sessionId のバリデーション: パストラバーサル防止
+  if (!isValidSessionId(sessionId)) {
+    return c.json({ error: 'Invalid sessionId format' }, 400)
   }
 
   const claudeDir = join(homedir(), '.claude', 'projects', cwdToProjectDir(project))
@@ -442,7 +477,7 @@ async function runCompact(sessionId: string, cwd: string, model: string): Promis
     cwd,
     model,
     sessionId,
-    permissionMode: 'default',
+    permissionMode: 'plan',
   })
   for await (const event of stream) {
     if (event.type === 'compact' && event.preTokens) {
@@ -462,6 +497,11 @@ chatRoutes.post('/compact', async (c) => {
 
   if (!sessionId) {
     return c.json({ error: 'sessionId is required' }, 400)
+  }
+
+  // プロジェクトパスのバウンダリチェック
+  if (project && !isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
   }
 
   // 既に実行中ならスキップ

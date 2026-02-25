@@ -13,7 +13,8 @@ import { serve } from '@hono/node-server'
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { resolve, join, basename } from 'node:path'
 import { homedir } from 'node:os'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
+import { isTailscaleIp, isProjectPathAllowed } from './path-guard.js'
 import { chatRoutes } from './routes/chat.js'
 import { createLogger } from '../utils/logger.js'
 
@@ -71,7 +72,7 @@ function scanWorkDirectory(): ProjectEntry[] {
 
       let repo = ''
       try {
-        const url = execSync(`git -C "${dirPath}" remote get-url origin`, { encoding: 'utf-8', timeout: 3000 }).trim()
+        const url = gitExec(dirPath, ['remote', 'get-url', 'origin'], 3000)
         repo = extractRepo(url)
       } catch { /* no remote */ }
 
@@ -100,11 +101,33 @@ function getProjects(): ProjectEntry[] {
   return [...merged, ...scanned.filter((s) => !seen.has(s.localPath))]
 }
 
+// isProjectPathAllowed は path-guard.ts から import 済み
+
+/** git コマンドを argv 形式で安全に実行 */
+function gitExec(projectPath: string, args: string[], timeout = 5000): string {
+  return execFileSync('git', ['-C', projectPath, ...args], {
+    encoding: 'utf-8',
+    timeout,
+  }).trim()
+}
+
 // --- Hono アプリ ---
 const app = new Hono()
 
-// CORS（Tailscale内のみだが念のため）
-app.use('*', cors())
+// CORS（Tailscale ネットワーク内のオリジンのみ許可）
+app.use('*', cors({
+  origin: (origin) => {
+    if (!origin) return `http://${HOST}:${PORT}` // same-origin requests
+    // Tailscale IP (100.64.0.0/10 リテラル) と localhost を許可
+    try {
+      const url = new URL(origin)
+      if (isTailscaleIp(url.hostname) || url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+        return origin
+      }
+    } catch { /* invalid origin */ }
+    return null // deny
+  },
+}))
 
 // 静的ファイル配信
 app.use('/static/*', serveStatic({ root: resolve(process.cwd(), 'src/web/public'), rewriteRequestPath: (path) => path.replace('/static', '') }))
@@ -145,7 +168,7 @@ app.post('/api/projects', async (c) => {
   let repo = body.repo || ''
   if (!repo) {
     try {
-      const url = execSync(`git -C "${localPath}" remote get-url origin`, { encoding: 'utf-8', timeout: 3000 }).trim()
+      const url = gitExec(localPath, ['remote', 'get-url', 'origin'], 3000)
       repo = extractRepo(url)
     } catch { /* no remote */ }
   }
@@ -191,6 +214,11 @@ app.get('/api/files', (c) => {
   const dirPath = c.req.query('path')
   if (!dirPath) return c.json({ error: 'path is required' }, 400)
 
+  // パスがプロジェクトルート配下かチェック
+  if (!isProjectPathAllowed(dirPath)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   try {
     const entries = readdirSync(dirPath, { withFileTypes: true })
     const items = entries
@@ -219,6 +247,11 @@ app.get('/api/files/content', (c) => {
   const filePath = c.req.query('path')
   if (!filePath) return c.json({ error: 'path is required' }, 400)
 
+  // パスがプロジェクトルート配下かチェック
+  if (!isProjectPathAllowed(filePath)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   try {
     const stat = statSync(filePath)
     // 1MB以上は拒否
@@ -237,6 +270,11 @@ app.get('/api/files/search', (c) => {
   const project = c.req.query('project')
   const query = c.req.query('q')
   if (!project || !query) return c.json({ items: [] })
+
+  // パスがプロジェクトルート配下かチェック
+  if (!isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
 
   const results: Array<{ name: string; path: string; isDir: boolean }> = []
   const lowerQ = query.toLowerCase()
@@ -267,12 +305,17 @@ app.get('/api/git/status', (c) => {
   const project = c.req.query('project')
   if (!project) return c.json({ error: 'project is required' }, 400)
 
+  // パスがプロジェクトルート配下かチェック
+  if (!isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   try {
     // ブランチ名
-    const branch = execSync(`git -C "${project}" branch --show-current`, { encoding: 'utf-8', timeout: 5000 }).trim()
+    const branch = gitExec(project, ['branch', '--show-current'])
 
     // 未コミットファイル
-    const statusRaw = execSync(`git -C "${project}" status --porcelain`, { encoding: 'utf-8', timeout: 5000 }).trim()
+    const statusRaw = gitExec(project, ['status', '--porcelain'])
     const files = statusRaw ? statusRaw.split('\n').map(line => ({
       status: line.slice(0, 2).trim(),
       file: line.slice(2).trimStart(),
@@ -282,7 +325,7 @@ app.get('/api/git/status', (c) => {
     let unpushed = 0
     let unpulled = 0
     try {
-      const lr = execSync(`git -C "${project}" rev-list --left-right --count HEAD...@{u}`, { encoding: 'utf-8', timeout: 5000 }).trim()
+      const lr = gitExec(project, ['rev-list', '--left-right', '--count', 'HEAD...@{u}'])
       const [a, b] = lr.split('\t').map(n => parseInt(n, 10) || 0)
       unpushed = a
       unpulled = b
@@ -291,14 +334,14 @@ app.get('/api/git/status', (c) => {
     // ブランチ一覧
     let branches: Array<{ name: string; current: boolean }> = []
     try {
-      const branchRaw = execSync(`git -C "${project}" branch --format="%(refname:short)"`, { encoding: 'utf-8', timeout: 5000 }).trim()
+      const branchRaw = gitExec(project, ['branch', '--format=%(refname:short)'])
       branches = branchRaw ? branchRaw.split('\n').map(b => ({ name: b, current: b === branch })) : []
     } catch { /* skip */ }
 
     // リモートURL → repo
     let repo = ''
     try {
-      const url = execSync(`git -C "${project}" remote get-url origin`, { encoding: 'utf-8', timeout: 3000 }).trim()
+      const url = gitExec(project, ['remote', 'get-url', 'origin'], 3000)
       repo = extractRepo(url)
     } catch { /* no remote */ }
 
@@ -311,7 +354,7 @@ app.get('/api/git/status', (c) => {
 // --- プロセス/サーバー一覧 API ---
 app.get('/api/processes', (c) => {
   try {
-    const raw = execSync('lsof -i -P -n -sTCP:LISTEN 2>/dev/null || true', { encoding: 'utf-8', timeout: 5000 }).trim()
+    const raw = execFileSync('lsof', ['-i', '-P', '-n', '-sTCP:LISTEN'], { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'ignore'] }).trim()
     const lines = raw.split('\n').slice(1) // skip header
     const seen = new Map<number, { pid: number; command: string; port: number; host: string; accessible: boolean }>()
 
@@ -337,7 +380,8 @@ app.get('/api/processes', (c) => {
         // Tailscaleからアクセス可能か判定
         // 0.0.0.0 / * / [::] = 全インターフェース → アクセス可能
         // 127.0.0.1 / [::1] = ローカルのみ → アクセス不可
-        const accessible = host === '*' || host === '0.0.0.0' || host === '[::]' || host.startsWith('100.')
+        // Tailscale CGNAT IP (100.64.0.0/10) にバインド → アクセス可能
+        const accessible = host === '*' || host === '0.0.0.0' || host === '[::]' || isTailscaleIp(host)
         seen.set(port, { pid, command, port, host, accessible })
       }
     }
@@ -352,9 +396,15 @@ app.get('/api/processes', (c) => {
 // --- MCP サーバー一覧 API ---
 app.get('/api/mcp', (c) => {
   const project = c.req.query('project') || ''
+
+  // プロジェクトパスが指定されている場合はバウンダリチェック
+  if (project && !isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   const items: Array<{ name: string; type: string; command: string; source: string; disabled?: boolean; envKeys?: string[] }> = []
   const sources: Array<{ path: string; label: string }> = [
-    { path: join(project, '.mcp.json'), label: 'project' },
+    ...(project ? [{ path: join(project, '.mcp.json'), label: 'project' }] : []),
     { path: join(homedir(), '.claude', 'settings.json'), label: 'user' },
     { path: join(homedir(), '.claude', 'settings.local.json'), label: 'user-local' },
   ]
@@ -382,9 +432,15 @@ app.get('/api/mcp', (c) => {
 // --- SKILLS 一覧 API ---
 app.get('/api/skills', (c) => {
   const project = c.req.query('project') || ''
+
+  // プロジェクトパスが指定されている場合はバウンダリチェック
+  if (project && !isProjectPathAllowed(project)) {
+    return c.json({ error: 'Access denied: path outside allowed projects' }, 403)
+  }
+
   const items: Array<{ name: string; title: string }> = []
   const dirs = [
-    join(project, '.claude', 'skills'),
+    ...(project ? [join(project, '.claude', 'skills')] : []),
     join(homedir(), '.claude', 'skills'),
   ]
   for (const dir of dirs) {

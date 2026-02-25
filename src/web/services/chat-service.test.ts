@@ -18,10 +18,28 @@ describe('chat-service', () => {
       expect(opts.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code' })
     })
 
-    it('permissionMode が bypassPermissions である', () => {
+    it('デフォルトは plan モード（安全なデフォルト）', () => {
       const opts = buildQueryOptions(baseParams)
+      expect(opts.permissionMode).toBe('plan')
+      expect(opts.allowDangerouslySkipPermissions).toBe(false)
+    })
+
+    it('permissionMode=default で bypassPermissions になる', () => {
+      const opts = buildQueryOptions({ ...baseParams, permissionMode: 'default' })
+      expect(opts.permissionMode).toBe('bypassPermissions')
+      expect(opts.allowDangerouslySkipPermissions).toBe(false)
+    })
+
+    it('permissionMode=yolo で bypassPermissions + dangerouslySkip になる', () => {
+      const opts = buildQueryOptions({ ...baseParams, permissionMode: 'yolo' })
       expect(opts.permissionMode).toBe('bypassPermissions')
       expect(opts.allowDangerouslySkipPermissions).toBe(true)
+    })
+
+    it('permissionMode=auto-accept で acceptEdits になる', () => {
+      const opts = buildQueryOptions({ ...baseParams, permissionMode: 'auto-accept' })
+      expect(opts.permissionMode).toBe('acceptEdits')
+      expect(opts.allowDangerouslySkipPermissions).toBe(false)
     })
 
     it('model が正しく渡される', () => {
@@ -336,10 +354,10 @@ describe('chat-service', () => {
       expect(opts.allowDangerouslySkipPermissions).toBe(false)
     })
 
-    it('planMode false → permissionMode が bypassPermissions のまま', () => {
+    it('planMode false → デフォルトの plan モードになる', () => {
       const opts = buildQueryOptions({ message: 'hello', cwd: '/tmp', model: 'sonnet', planMode: false })
-      expect(opts.permissionMode).toBe('bypassPermissions')
-      expect(opts.allowDangerouslySkipPermissions).toBe(true)
+      expect(opts.permissionMode).toBe('plan')
+      expect(opts.allowDangerouslySkipPermissions).toBe(false)
     })
 
     it('permissionMode "plan" → plan モード', () => {
@@ -354,10 +372,10 @@ describe('chat-service', () => {
       expect(opts.allowDangerouslySkipPermissions).toBe(false)
     })
 
-    it('permissionMode "default" → bypassPermissions モード', () => {
+    it('permissionMode "default" → bypassPermissions モード（dangerouslySkip なし）', () => {
       const opts = buildQueryOptions({ message: 'hello', cwd: '/tmp', model: 'sonnet', permissionMode: 'default' })
       expect(opts.permissionMode).toBe('bypassPermissions')
-      expect(opts.allowDangerouslySkipPermissions).toBe(true)
+      expect(opts.allowDangerouslySkipPermissions).toBe(false)
     })
 
     it('permissionMode "yolo" → bypassPermissions + dangerouslySkip', () => {

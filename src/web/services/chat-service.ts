@@ -36,6 +36,7 @@ export interface ToolDetail {
 
 export type ChatEvent =
   | { type: 'session'; sessionId: string }
+  | { type: 'stream-start'; streamId: string }
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; status: string; detail?: ToolDetail }
   | { type: 'warning'; command: string; label: string }
@@ -97,20 +98,22 @@ async function loadSdk(): Promise<SdkModule> {
 
 export function buildQueryOptions(params: ChatParams): Record<string, unknown> {
   // permissionMode mapping:
-  //   'default'     → bypassPermissions (個人サーバーのデフォルト)
-  //   'plan'        → plan (計画モード)
+  //   'default'     → bypassPermissions (個人サーバー用、明示選択のみ)
+  //   'plan'        → plan (計画モード、デフォルト)
   //   'auto-accept' → acceptEdits (編集のみ自動承認)
   //   'yolo'        → bypassPermissions + dangerouslySkipPermissions (全ツール無制限)
-  const mode = params.permissionMode || (params.planMode ? 'plan' : 'default')
+  const mode = params.permissionMode || (params.planMode ? 'plan' : 'plan')
   const sdkMode = mode === 'plan' ? 'plan'
     : mode === 'auto-accept' ? 'acceptEdits'
-    : 'bypassPermissions'
+    : mode === 'default' ? 'bypassPermissions'
+    : mode === 'yolo' ? 'bypassPermissions'
+    : 'plan'
   const options: Record<string, unknown> = {
     cwd: params.cwd,
     model: params.model,
     maxTurns: mode === 'yolo' ? 200 : 50,
     permissionMode: sdkMode,
-    allowDangerouslySkipPermissions: mode === 'default' || mode === 'yolo',
+    allowDangerouslySkipPermissions: mode === 'yolo',
     includePartialMessages: true,
     // Claude Code CLI 相当: プロジェクト設定 + ユーザー設定を自動読み込み
     settingSources: ['project', 'user'],
@@ -266,7 +269,7 @@ export async function* createChatStream(params: ChatParams): AsyncGenerator<Chat
   log.info(`Chat request [${streamId}]: "${params.message.slice(0, 60)}..." cwd=${params.cwd} model=${params.model} images=${imgCount}`)
 
   // streamId を最初に通知
-  yield { type: 'session', sessionId: '' } as ChatEvent & { streamId?: string }
+  yield { type: 'stream-start', streamId } as ChatEvent
 
   // 画像がある場合はコンテンツブロック配列で送信（Agent SDK のマルチモーダル対応）
   let prompt: string | AsyncIterable<unknown>
