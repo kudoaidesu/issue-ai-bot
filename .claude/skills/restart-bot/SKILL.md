@@ -12,7 +12,7 @@ description: claude-crew の launchd サービスを制御する（再起動・�
 | ラベル | `ai.claude-crew.web` |
 | plist | `~/Library/LaunchAgents/ai.claude-crew.web.plist` |
 | 実行方法 | `tsx src/web/server.ts`（ビルド不要、ソース直接実行） |
-| 作業ディレクトリ | `/Users/ai_server/work/claude-crew` |
+| 作業ディレクトリ | `/Users/ai-server/work/claude-crew` |
 | ログ (stdout) | `data/logs/web.log` |
 | ログ (stderr) | `data/logs/web.err.log` |
 
@@ -39,13 +39,13 @@ launchctl list | grep claude-crew
 ### 起動確認（ログ）
 
 ```bash
-tail -20 /Users/ai_server/work/claude-crew/data/logs/web.log
+tail -20 /Users/ai-server/work/claude-crew/data/logs/web.log
 ```
 
 ### エラー確認
 
 ```bash
-tail -20 /Users/ai_server/work/claude-crew/data/logs/web.err.log
+tail -20 /Users/ai-server/work/claude-crew/data/logs/web.err.log
 ```
 
 ### 停止
