@@ -25,7 +25,7 @@ const log = createLogger('web:chat')
  * - 先頭の空白・改行をトリム
  * - UUID/ハッシュ値のみの場合は空文字を返す（呼び出し元でフォールバック）
  */
-function cleanPreview(raw: string): string {
+export function cleanPreview(raw: string): string {
   let text = raw
   // システムタグを中身ごと除去（閉じタグあり）
   text = text.replace(/<(ide_opened_file|ide_selection|system-reminder|user-prompt-submit-hook)[^>]*>[\s\S]*?<\/\1>/g, '')
@@ -97,7 +97,7 @@ export function getSessions(): SessionEntry[] {
  * ~/.claude/projects/ からAgent SDKのセッションファイルを直接スキャン
  * cwdパスをハッシュ化したディレクトリ名でプロジェクトを特定
  */
-function cwdToProjectDir(cwd: string): string {
+export function cwdToProjectDir(cwd: string): string {
   // Agent SDKはパスの / と _ を - に変換してディレクトリ名にする
   return cwd.replace(/[/_]/g, '-')
 }
